@@ -1,0 +1,28 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup",
+        "hooks": [
+          { "type": "command", "command": "cat \"$CLAUDE_PROJECT_DIR/PROGRESS.md\" 2>/dev/null || true" }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "Bash(sudo apt install:*)",
+      "Bash(sudo apt update:*)",
+      "Bash(python3:*)",
+      "Bash(.venv/bin/python3:*)",
+      "Bash(.venv/bin/pytest:*)",
+      "Bash(echo:*)",
+      "Bash(ls:*)",
+      "Bash(jq:*)",
+      "Skill(wrapup)",
+      "Skill(wrapup:*)"
+    ]
+  },
+  "model": "opus",
+  "effortLevel": "xhigh"
+}
