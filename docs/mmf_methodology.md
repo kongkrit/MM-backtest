@@ -1,0 +1,117 @@
+# Money-market fund series — methodology
+
+Synthetic monthly total-return and price series for **0% TER** money-market
+funds holding short-dated U.S. Treasury bills, from **January 1972** to the
+latest complete month. Built by [`scripts/build_mmf.py`](../scripts/build_mmf.py).
+
+## Funds
+
+| File | Bucket | Buys | Avg life | MtM duration | Income window |
+|---|---|---|---|---|---|
+| [`mmf_0_90dtm.csv`](../mmf_0_90dtm.csv) | 0–90 DTM | 13-week bill | ~45 d | 45/365 yr | trailing 3 mo |
+| [`mmf_0_30dtm.csv`](../mmf_0_30dtm.csv) | 0–30 DTM | 4-week bill | ~15 d | 15/365 yr | trailing 1 mo |
+
+Canonical latest series live at the **repo root**. Each build also writes a
+snapshot to `output/mmf_<fund>_<vintage>.csv` (keyed to the last data month) so
+`output/` accumulates build history.
+
+## Columns
+
+| Column | Meaning |
+|---|---|
+| `yyyymm` | Month key, integer (e.g. `200208` = Aug 2002). |
+| `price_idx` | Price / NAV index of the **distributing** class (coupons paid out, NAV marks to market). = 100 at Jan-1972. Cyclical: rises when yields fall, falls when they rise. |
+| `coupon_rate_monthly` | Monthly coupon as a fraction of NAV (decimal) — cash a distributing holder receives that month. Smoothed to a level rate. |
+| `coupon_rate_annual` | `coupon_rate_monthly × 12` (simple, not compounded). |
+| `tr_idx` | Total-return index of the **accumulating** class (coupons reinvested). = 100 at the Aug-2002 splice. |
+
+The two classes describe one portfolio and are linked by the exact identity
+`tr_return[t] = price_return[t] + coupon_rate_monthly[t]`.
+
+## Model
+
+A "0–N DTM" fund buys the ~N-day bill at auction and holds it to maturity, so
+the book is a ladder of remaining lives spread uniformly over 0–N days.
+
+1. **Yield.** FRED quotes bills on a **discount basis**; convert to the
+   bond-equivalent (investment) yield actually earned:
+   `y = d · (365/360) / (1 − d · tenor/360)` (decimal). Uplift reaches ~+0.8%
+   at the 1981 peak for the 13-week bill.
+2. **Income (carry).** The book holds bills bought over the trailing ~N days,
+   each locked at the N-day yield prevailing then, so
+   `coupon_rate_annual = trailing-average(y_month_avg)` — smooth, and it *lags*
+   the market like a real money-fund distribution yield.
+   `coupon_rate_monthly = coupon_rate_annual / 12`.
+3. **Mark-to-market.** `price_return[t] = −(avg_life/365) · (y_eom[t] − y_eom[t−1])`
+   using **month-end** yields (0 in the first month). `price_idx` compounds it
+   from 100 at Jan-1972.
+4. **Total return.** `tr_idx` compounds `coupon_rate_monthly + price_return`,
+   normalised so the Aug-2002 splice month = 100.
+
+Month-average yields drive income; month-end yields drive the MtM — separated
+using the **daily** FRED series.
+
+## Data sources (public, FRED)
+
+| Series | Use | Coverage |
+|---|---|---|
+| `DTB3` — 3-month bill, discount basis, daily | 0–90 fund yield (all history) | 1954→ |
+| `DTB4WK` — 4-week bill, discount basis, daily | 0–30 fund yield | **2001-07→** |
+| `DFF` — effective fed funds, daily | proxy diagnostics only | 1954→ |
+
+Fetch pattern: `https://fred.stlouisfed.org/graph/fredgraph.csv?id=<ID>`.
+These come from the Federal Reserve H.15 release — the official secondary-market
+bill rates, essentially never revised.
+
+## ⚠️ Pre-2001 proxy — READ THIS for the 0–30 fund
+
+The Treasury did not auction 4-week bills before **July 2001**, so no 1-month
+series exists for **1972 → 2001-06** (571 of 654 months). There the 4-week
+*discount* rate is proxied as the 3-month discount minus the mean overlap
+spread (month-average and month-end handled separately):
+
+- mean 3M−4W discount spread: **avg 5.6 bp, eom 5.3 bp**
+- proxy accuracy vs the real 4-week bill over the 2001-07+ overlap: **13.3 bp RMSE**
+
+**What this means.** Pre-2001 the 0–30 fund is the *same 3-month rate signal*
+run through genuine 0–30 conventions (shorter 1-month income window + 28-day
+yield conversion). It is therefore legitimately **lower-yielding and more
+responsive** than the 0–90 fund — but it carries little information
+*independent* of it, because the real 1M–3M spread volatility (which swings
+−35…+93 bp post-2001) is flattened to a constant 5.6 bp.
+
+- Cumulative carry drag, 1972→2001: **0–30 earns ~−4.3%** vs 0–90.
+- Month-to-month 0–30 vs 0–90 gap: pre-2001 **−159…+422 bp** (structural, on a
+  proxied signal, largest during the 1980–81 rate rollercoaster); post-2001
+  **−35…+93 bp** (fully observed).
+
+**Do not** read pre-2001-07 month-to-month 0–30/0–90 divergences as observed
+market behaviour. From 2001-07 onward every point is a real 4-week bill.
+
+## Validations
+
+| Check | Result |
+|---|---|
+| discount→bond-equivalent conversion vs FRED `DGS3MO` (independent investment-basis 3-mo CMT), 538 mo | mean −0.9 bp, stdev 2.2 bp |
+| single-tenor proxy for the bucket (3M vs 1M spread, 2001+) | avg 5.6 bp |
+| full-period TR CAGR vs known long-run T-bill returns | 0–90 4.63%, 0–30 4.51% (in band) |
+
+## Regenerate
+
+```bash
+# refetch inputs if needed
+for id in DTB3 DTB4WK DFF; do
+  curl -sSL "https://fred.stlouisfed.org/graph/fredgraph.csv?id=$id" -o data/$id.csv
+done
+python3 scripts/build_mmf.py
+```
+
+Add a fund by appending `{key, tenor, max_dtm}` to `FUNDS` in the script.
+
+## External total-return override (e.g. LSEG/Datastream)
+
+Drop `data/lseg_<key>_tr.csv` with columns `yyyymm,value` (a genuine
+total-return index) and that fund's `tr_idx` is replaced by it, rescaled to
+Aug-2002 = 100; the FRED build still supplies `price_idx`/coupon columns. The
+LSEG MCP connector could not be reached in this build (it needs interactive
+OAuth); this hook lets a genuine index slot in once available.

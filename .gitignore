@@ -66,6 +66,6 @@ out/
 .claude/settings.local.json
 
 # Output artefacts (keep sources, ignore generated)
-output/
+# NOTE: output/ holds tracked MMF build-history snapshots — intentionally NOT ignored.
 exports/
 *.tmp
