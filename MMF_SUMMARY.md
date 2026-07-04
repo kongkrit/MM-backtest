@@ -15,10 +15,14 @@ Read these two from the **repo root** — they are always the latest series:
 
 Both files share the same columns and date grid, so they align row-for-row.
 
-`output/` holds **build-history snapshots** named `mmf_<fund>_<vintage>.csv`
-(e.g. `mmf_0_90dtm_202606.csv`, keyed to the last data month). Use these only
-to reproduce or compare past builds — for current data, always read the two
-files at the repo root.
+A comparison chart is at `mmf_chart.png` (repo root): three shared-axis panes —
+price index (semilog), annual coupon rate, and the monthly coupon delta
+(0–90 − 0–30, bp of NAV) — for 0–30 vs 0–90.
+
+`output/` holds **timestamped build-history snapshots** named
+`YYYYMMDD_HHMM_mmf_<fund>.csv` (and `..._mmf_chart.png`), stamped when the build
+ran. Use these only to reproduce or compare past builds — for current data,
+always read the two files at the repo root.
 
 ## Columns
 

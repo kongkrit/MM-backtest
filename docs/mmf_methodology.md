@@ -12,8 +12,11 @@ latest complete month. Built by [`scripts/build_mmf.py`](../scripts/build_mmf.py
 | [`mmf_0_30dtm.csv`](../mmf_0_30dtm.csv) | 0–30 DTM | 4-week bill | ~15 d | 15/365 yr | trailing 1 mo |
 
 Canonical latest series live at the **repo root**. Each build also writes a
-snapshot to `output/mmf_<fund>_<vintage>.csv` (keyed to the last data month) so
-`output/` accumulates build history.
+**timestamped** snapshot `output/<YYYYMMDD_HHMM>_mmf_<fund>.csv` (stamp taken at
+write time) so `output/` accumulates build history. `scripts/plot_mmf.py`
+renders `mmf_chart.png` — three shared-axis panes (price index semilog, annual
+coupon, and the monthly coupon delta 0–90 − 0–30 in bp) — with the same
+root/`output/` timestamping; it needs matplotlib (`.venv`).
 
 ## Columns
 
@@ -103,7 +106,8 @@ market behaviour. From 2001-07 onward every point is a real 4-week bill.
 for id in DTB3 DTB4WK DFF; do
   curl -sSL "https://fred.stlouisfed.org/graph/fredgraph.csv?id=$id" -o data/$id.csv
 done
-python3 scripts/build_mmf.py
+python3 scripts/build_mmf.py            # series CSVs (pure Python)
+.venv/bin/python3 scripts/plot_mmf.py   # mmf_chart.png (needs matplotlib)
 ```
 
 Add a fund by appending `{key, tenor, max_dtm}` to `FUNDS` in the script.

@@ -25,6 +25,16 @@ Columns: `yyyymm`, `price_idx` (distributing NAV, =100 @ Jan-1972), `coupon_rate
 > build 0–30-vs-0–90 spread/relative-value signals on that window. See
 > [`MMF_SUMMARY.md`](MMF_SUMMARY.md).
 
+## Chart
+
+![0–30 vs 0–90 DTM — price index (semilog), annual coupon rate, and monthly coupon delta](mmf_chart.png)
+
+Three panes on a shared time axis: **(1)** price/NAV index, log scale (both stay
+near 100; the 0–90 fund swings ~3× wider — more duration); **(2)** annual coupon
+rate (near-identical — the front bill curve is flat); **(3)** the monthly coupon
+delta, 0–90 − 0–30 (bp of NAV) — flat near zero except during sharp rate moves.
+The dashed line marks Jul-2001, before which the 0–30 series is proxied.
+
 ## Documentation
 
 - [`MMF_SUMMARY.md`](MMF_SUMMARY.md) — consumer summary: **what** the files are and the 0–30 caution.
@@ -37,22 +47,32 @@ Columns: `yyyymm`, `price_idx` (distributing NAV, =100 @ Jan-1972), `coupon_rate
 for id in DTB3 DTB4WK DFF; do
   curl -sSL "https://fred.stlouisfed.org/graph/fredgraph.csv?id=$id" -o data/$id.csv
 done
-python3 scripts/build_mmf.py
+python3 scripts/build_mmf.py            # series CSVs (pure Python, no deps)
+.venv/bin/python3 scripts/plot_mmf.py   # mmf_chart.png (needs matplotlib)
 ```
 
-The builder writes the canonical CSVs to the repo root and an archived,
-vintage-stamped snapshot to `output/mmf_<fund>_<lastmonth>.csv` (build history).
-Add a maturity bucket by appending `{key, tenor, max_dtm}` to the `FUNDS` table
-in [`scripts/build_mmf.py`](scripts/build_mmf.py). Pure Python 3 — no dependencies.
+The series builder writes the canonical CSVs to the repo root plus a
+**timestamped** snapshot `output/<YYYYMMDD_HHMM>_mmf_<fund>.csv` (the stamp is
+taken at write time). `plot_mmf.py` likewise writes `mmf_chart.png` at the root
+and a timestamped copy in `output/`. Add a maturity bucket by appending
+`{key, tenor, max_dtm}` to the `FUNDS` table in
+[`scripts/build_mmf.py`](scripts/build_mmf.py).
+
+The series builder is dependency-free Python 3; charting needs matplotlib:
+
+```bash
+python3 -m venv .venv && .venv/bin/python3 -m pip install matplotlib
+```
 
 ## Repo layout
 
 | Path | Purpose |
 |---|---|
 | `mmf_0_90dtm.csv`, `mmf_0_30dtm.csv` | Canonical latest series (repo root). |
-| `scripts/build_mmf.py` | Single builder for all funds. |
+| `mmf_chart.png` | Canonical latest 2-pane comparison chart (repo root). |
+| `scripts/build_mmf.py`, `scripts/plot_mmf.py` | Series builder and chart renderer. |
 | `data/` | Raw FRED inputs (`DTB3`, `DTB4WK`, `DFF`). |
-| `output/` | Versioned build-history snapshots. |
+| `output/` | Timestamped build-history snapshots (`YYYYMMDD_HHMM_mmf_*`). |
 | `docs/`, `MMF_SUMMARY.md` | Methodology and consumer summary. |
 | `PROGRESS.md` | Session handoff (printed into context at startup). |
 

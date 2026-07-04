@@ -20,6 +20,8 @@
       "Bash(ls:*)",
       "Bash(jq:*)",
       "Bash(curl:*)",
+      "Bash(head:*)",
+      "Bash(cd:*)",
       "Skill(wrapup)",
       "Skill(wrapup:*)"
     ]

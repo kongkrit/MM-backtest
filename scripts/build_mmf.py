@@ -4,11 +4,11 @@ Build synthetic monthly series for 0% TER money-market funds that hold
 0-N DTM (days-to-maturity) U.S. Treasury bills, from January 1972.
 
 Emits, for each fund in the FUNDS table below, TWO copies:
-    <repo-root>/mmf_<key>.csv           canonical latest series (what consumers read)
-    output/mmf_<key>_<vintage>.csv      archived build-history snapshot, keyed to
-                                        the last data month (e.g. 202606)
+    <repo-root>/mmf_<key>.csv                 canonical latest series (consumers read this)
+    output/<YYYYMMDD_HHMM>_mmf_<key>.csv       timestamped build-history snapshot
+                                              (stamp captured right before writing)
 so the repo root always holds the current series while output/ accumulates the
-history of past builds.  Funds:
+timestamped history of past builds.  Funds:
     mmf_0_90dtm  0-90 DTM  (buys 13-week bills, avg life ~45d)
     mmf_0_30dtm  0-30 DTM  (buys  4-week bills, avg life ~15d)
 
@@ -60,6 +60,7 @@ replace that fund's tr_idx with a genuine external total-return index.
 import csv
 import math
 import os
+from datetime import datetime
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.join(HERE, "..")            # repo root: canonical latest series
@@ -195,11 +196,12 @@ if __name__ == "__main__":
           f"eom={note['spread_eom_bp']:.1f}bp; real {note['overlap'][0]}-"
           f"{note['overlap'][1]}, {note['proxied']} months proxied pre-2001 "
           f"(overlap RMSE {note['rmse_bp']:.1f}bp)")
-    for f in FUNDS:
-        out = build_fund(disc_by_key[f["key"]], f["tenor"], f["max_dtm"], f["key"])
-        vintage = out[-1]["yyyymm"]                        # last data month
-        write(out, os.path.join(ROOT, f"mmf_{f['key']}.csv"))            # canonical
-        write(out, os.path.join(OUTD, f"mmf_{f['key']}_{vintage}.csv"))  # history
+    results = [(f, build_fund(disc_by_key[f["key"]], f["tenor"], f["max_dtm"], f["key"]))
+               for f in FUNDS]
+    stamp = datetime.now().strftime("%Y%m%d_%H%M")   # fetched right before writing
+    for f, out in results:
+        write(out, os.path.join(ROOT, f"mmf_{f['key']}.csv"))          # canonical latest
+        write(out, os.path.join(OUTD, f"{stamp}_mmf_{f['key']}.csv"))  # timestamped history
         a, z = out[0], out[-1]
         yrs = len(out) / 12.0
         print(f"mmf_{f['key']}: {len(out)} rows {a['yyyymm']}-{z['yyyymm']}  "
@@ -207,3 +209,4 @@ if __name__ == "__main__":
               f"CAGR {(z['tr_idx']/a['tr_idx'])**(1/yrs)*100-100:.3f}%  "
               f"price[{min(r['price_idx'] for r in out):.2f},"
               f"{max(r['price_idx'] for r in out):.2f}]")
+    print(f"build stamp: {stamp}")
