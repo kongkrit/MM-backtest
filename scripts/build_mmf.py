@@ -11,6 +11,9 @@ so the repo root always holds the current series while output/ accumulates the
 timestamped history of past builds.  Funds:
     mmf_0_90dtm  0-90 DTM  (buys 13-week bills, avg life ~45d)
     mmf_0_30dtm  0-30 DTM  (buys  4-week bills, avg life ~15d)
+    mmf_0dtm            CANONICAL cash: secured Treasury repo, SOFR (2018+; proxied
+                        before; flat NAV) — what a government MMF earns / you can hold
+    mmf_0dtm_fed_funds  effective fed funds (unsecured, interbank) — BENCHMARK only
 
 Columns (identical schema for every fund):
     yyyymm, price_idx, coupon_rate_monthly, coupon_rate_annual, tr_idx
@@ -36,6 +39,10 @@ INPUTS  (public FRED daily discount rates, %, converted to bond-equivalent)
 ==========================================================================
   data/DTB3.csv     3-month (13-week) bill, 1954->        -> 0-90 fund, all history
   data/DTB4WK.csv   4-week bill, 2001-07->                -> 0-30 fund, 2001-07+
+  data/SOFR.csv     secured overnight financing rate (repo), 2018-04-> -> 0dtm
+                    (CANONICAL cash; pre-2018 proxied as fed funds - mean spread, ~0 bp)
+  data/DFF.csv      effective fed funds (overnight), 1954-> -> 0dtm_fed_funds (benchmark;
+                    add-on rate; also the pre-2018 proxy base for 0dtm/SOFR)
 
 PRE-2001 PROXY (0-30 fund only)
 -------------------------------
@@ -77,6 +84,16 @@ DAYS_365  = 365.0
 FUNDS = [
     {"key": "0_90dtm", "tenor": 91, "max_dtm": 90},
     {"key": "0_30dtm", "tenor": 28, "max_dtm": 30},
+    # 0dtm = CANONICAL overnight "cash": secured Treasury repo (SOFR). This is
+    # what a government/Treasury money-market fund actually earns and what you can
+    # hold in a brokerage account. Real data 2018-04+; before that proxied as
+    # fed funds minus the mean fed-funds - SOFR spread (~0 bp). tenor 1 makes
+    # investment_yield() collapse to the x365/360 (actual/360->actual/365)
+    # conversion; max_dtm 0 => zero duration => flat NAV (=100).
+    {"key": "0dtm", "tenor": 1, "max_dtm": 0},
+    # 0dtm_fed_funds = effective fed funds (UNSECURED, interbank). BENCHMARK ONLY
+    # — not directly holdable at retail. Same flat-NAV cash mechanics.
+    {"key": "0dtm_fed_funds", "tenor": 1, "max_dtm": 0},
 ]
 
 
@@ -125,6 +142,25 @@ def proxy_short_discount(d3, d1):
     note = {"spread_avg_bp": da * 1e4, "spread_eom_bp": de * 1e4,
             "overlap": (ov[0], ov[-1]), "proxied": proxied,
             "rmse_bp": math.sqrt(se / len(ov)) * 1e4}
+    return out, note
+
+
+def proxy_overnight(base, target):
+    """Full-history overnight add-on rate {ym:(avg,eom)}: real `target` (e.g.
+    SOFR, secured) where it exists, else `base` (fed funds) minus the mean
+    base-target overlap spread.  Same shape as proxy_short_discount; used for
+    the canonical secured-overnight (0dtm) series whose real data starts 2018-04."""
+    ov = sorted(set(base) & set(target))
+    da = sum(base[m][0] - target[m][0] for m in ov) / len(ov)
+    de = sum(base[m][1] - target[m][1] for m in ov) / len(ov)
+    out, proxied = {}, 0
+    for m, (a, e) in base.items():
+        if m in target:
+            out[m] = target[m]
+        else:
+            out[m] = (a - da, e - de)
+            proxied += 1
+    note = {"spread_avg_bp": da * 1e4, "overlap": (ov[0], ov[-1]), "proxied": proxied}
     return out, note
 
 
@@ -190,12 +226,19 @@ if __name__ == "__main__":
     d3 = load_daily(os.path.join(DATA, "DTB3.csv"))
     d1_real = load_daily(os.path.join(DATA, "DTB4WK.csv"))
     d1_full, note = proxy_short_discount(d3, d1_real)
-    disc_by_key = {"0_90dtm": d3, "0_30dtm": d1_full}
+    dff = load_daily(os.path.join(DATA, "DFF.csv"))   # overnight cash (fed funds)
+    sofr = load_daily(os.path.join(DATA, "SOFR.csv"))  # secured overnight repo
+    sofr_full, snote = proxy_overnight(dff, sofr)
+    disc_by_key = {"0_90dtm": d3, "0_30dtm": d1_full,
+                   "0dtm": sofr_full, "0dtm_fed_funds": dff}
 
     print(f"4-week proxy: spread avg={note['spread_avg_bp']:.1f}bp "
           f"eom={note['spread_eom_bp']:.1f}bp; real {note['overlap'][0]}-"
           f"{note['overlap'][1]}, {note['proxied']} months proxied pre-2001 "
           f"(overlap RMSE {note['rmse_bp']:.1f}bp)")
+    print(f"SOFR proxy: fed funds - SOFR spread {snote['spread_avg_bp']:.1f}bp; "
+          f"real {snote['overlap'][0]}-{snote['overlap'][1]}, "
+          f"{snote['proxied']} months proxied pre-2018")
     results = [(f, build_fund(disc_by_key[f["key"]], f["tenor"], f["max_dtm"], f["key"]))
                for f in FUNDS]
     stamp = datetime.now().strftime("%Y%m%d_%H%M")   # fetched right before writing

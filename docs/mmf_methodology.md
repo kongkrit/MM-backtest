@@ -1,22 +1,37 @@
 # Money-market fund series — methodology
 
 Synthetic monthly total-return and price series for **0% TER** money-market
-funds holding short-dated U.S. Treasury bills, from **January 1972** to the
+funds holding short-dated U.S. Treasuries / cash, from **January 1972** to the
 latest complete month. Built by [`scripts/build_mmf.py`](../scripts/build_mmf.py).
 
 ## Funds
 
-| File | Bucket | Buys | Avg life | MtM duration | Income window |
+| File | Bucket | Rate | Avg life | MtM duration | Income window |
 |---|---|---|---|---|---|
 | [`mmf_0_90dtm.csv`](../mmf_0_90dtm.csv) | 0–90 DTM | 13-week bill | ~45 d | 45/365 yr | trailing 3 mo |
 | [`mmf_0_30dtm.csv`](../mmf_0_30dtm.csv) | 0–30 DTM | 4-week bill | ~15 d | 15/365 yr | trailing 1 mo |
+| [`mmf_0dtm.csv`](../mmf_0dtm.csv) | overnight | SOFR (secured, **canonical**) | ~0 | 0 (flat NAV) | current mo |
+| [`mmf_0dtm_fed_funds.csv`](../mmf_0dtm_fed_funds.csv) | overnight | effective fed funds (benchmark) | ~0 | 0 (flat NAV) | current mo |
+
+**Overnight funds** (`0dtm`, `0dtm_fed_funds`): zero-duration cash. The rate is an
+add-on (actual/360) fed through the same `investment_yield()` at tenor 1, which
+collapses to the ×365/360 actual-365 conversion; `max_dtm 0` → duration 0 → flat
+`price_idx`=100, so all return is coupon. **`0dtm` is canonical**: it uses **SOFR**
+(secured Treasury repo) — what a government MMF earns and what you can hold — real
+from 2018-04 and proxied before as fed funds minus the mean fed-funds − SOFR spread
+(**~0.3 bp**, so pre-2018 ≈ `0dtm_fed_funds`). `0dtm_fed_funds` uses **effective
+fed funds** (unsecured, interbank, 1954+) as a reference benchmark. Both yield
+**above** the bill funds
+(CAGR ~5.0% vs 4.5–4.6%) — the T-bill safety/liquidity premium, a full-history
+average dominated by the 1970s-80s (in 2018+ all four sit within a few bp).
 
 Canonical latest series live at the **repo root**. Each build also writes a
 **timestamped** snapshot `output/<YYYYMMDD_HHMM>_mmf_<fund>.csv` (stamp taken at
 write time) so `output/` accumulates build history. `scripts/plot_mmf.py`
-renders `mmf_chart.png` — three shared-axis panes (price index semilog, annual
-coupon, and the monthly coupon delta 0–90 − 0–30 in bp) — with the same
-root/`output/` timestamping; it needs matplotlib (`.venv`).
+renders two 3-pane comparison charts (price index semilog, annual coupon, monthly
+coupon delta) — `mmf_30-90DTM_compare.png` (0–30 vs 0–90 bills) and
+`mmf_0dtm_compare.png` (fed funds vs SOFR cash) — with the same root/`output/`
+timestamping; it needs matplotlib (`.venv`).
 
 ## Columns
 
@@ -60,7 +75,8 @@ using the **daily** FRED series.
 |---|---|---|
 | `DTB3` — 3-month bill, discount basis, daily | 0–90 fund yield (all history) | 1954→ |
 | `DTB4WK` — 4-week bill, discount basis, daily | 0–30 fund yield | **2001-07→** |
-| `DFF` — effective fed funds, daily | proxy diagnostics only | 1954→ |
+| `SOFR` — secured overnight financing rate, daily | 0dtm (canonical cash) | **2018-04→** |
+| `DFF` — effective fed funds, daily | 0dtm_fed_funds (benchmark); SOFR proxy base | 1954→ |
 
 Fetch pattern: `https://fred.stlouisfed.org/graph/fredgraph.csv?id=<ID>`.
 These come from the Federal Reserve H.15 release — the official secondary-market
@@ -103,11 +119,11 @@ market behaviour. From 2001-07 onward every point is a real 4-week bill.
 
 ```bash
 # refetch inputs if needed
-for id in DTB3 DTB4WK DFF; do
+for id in DTB3 DTB4WK DFF SOFR; do
   curl -sSL "https://fred.stlouisfed.org/graph/fredgraph.csv?id=$id" -o data/$id.csv
 done
 python3 scripts/build_mmf.py            # series CSVs (pure Python)
-.venv/bin/python3 scripts/plot_mmf.py   # mmf_chart.png (needs matplotlib)
+.venv/bin/python3 scripts/plot_mmf.py   # comparison charts (needs matplotlib)
 ```
 
 Add a fund by appending `{key, tenor, max_dtm}` to `FUNDS` in the script.

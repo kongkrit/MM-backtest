@@ -1,17 +1,22 @@
 #!/usr/bin/env python3
 """
-Render mmf_chart.png — a 3-pane comparison of the 0-30 vs 0-90 DTM rolling
-Treasury-bill funds, all sharing one x-axis (time):
+Render the comparison charts (one per entry in CHARTS), each a 3-pane figure on
+a shared time axis:
 
     pane 1   price_idx, SEMILOG y            (both funds)
     pane 2   coupon_rate_annual, LINEAR y    (both funds)
-    pane 3   monthly coupon delta, LINEAR y  = coupon_monthly(0-90) - coupon_monthly(0-30),
-             in basis points of NAV; blue where 0-90 pays more, red where 0-30 does.
+    pane 3   monthly coupon delta, LINEAR y  = coupon_monthly(A) - coupon_monthly(B),
+             in bp of NAV; blue where A pays more, red where B pays more.
 
-Reads the canonical CSVs at the repo root; writes:
-    <repo-root>/mmf_chart.png                 canonical latest chart
-    output/<YYYYMMDD_HHMM>_mmf_chart.png       timestamped build-history snapshot
-                                              (stamp captured right before writing)
+Charts produced:
+    mmf_30-90DTM_compare.png   0-90 vs 0-30 DTM T-bill funds
+    mmf_0dtm_compare.png       fed-funds vs SOFR overnight-cash funds (price pane
+                               is flat 100 — cash has zero duration)
+
+Reads the canonical CSVs at the repo root; for each chart writes:
+    <repo-root>/<name>.png                  canonical latest
+    output/<YYYYMMDD_HHMM>_<name>.png        timestamped build-history snapshot
+                                            (stamp captured right before writing)
 
 Needs matplotlib (see .venv):  .venv/bin/python3 scripts/plot_mmf.py
 Fund colours are dataviz categorical slots 1 (blue) & 2 (aqua); the delta uses
@@ -37,81 +42,109 @@ OUTD = os.path.join(HERE, "..", "output")
 # dataviz reference palette (light surface) ---------------------------------
 SURFACE = "#fcfcfb"; INK = "#0b0b0b"; INK2 = "#52514e"
 MUTED = "#898781"; GRID = "#e1e0d9"; AXIS = "#c3c2b7"
-C90 = "#2a78d6"   # blue  — slot 1  -> 0-90 DTM
-C30 = "#1baf7a"   # aqua  — slot 2  -> 0-30 DTM
-CRED = "#e34948"  # red   — slot 6  -> diverging pole (0-30 pays more)
-SPLIT = datetime(2001, 7, 1)   # 0-30 is proxied before this; observed after
+CA = "#2a78d6"    # blue  — slot 1  -> fund A
+CB = "#1baf7a"    # aqua  — slot 2  -> fund B
+CRED = "#e34948"  # red   — slot 6  -> diverging pole (B pays more)
+
+CHARTS = [
+    {
+        "name": "mmf_30-90DTM_compare",
+        "A": ("0_90dtm", "0–90 DTM"), "B": ("0_30dtm", "0–30 DTM"),
+        "split": datetime(2001, 7, 1), "split_note": "0–30 DTM: proxied ← | → observed",
+        "price_ylim": (98.2, 100.7), "price_yticks": [98.5, 99, 99.5, 100, 100.5],
+        "titles": ("Money-market fund price index — 0–30 vs 0–90 DTM",
+                   "Annual coupon rate — 0–30 vs 0–90 DTM",
+                   "Monthly coupon delta — 0–90 minus 0–30"),
+        "delta_ylabel": "Monthly coupon Δ\n0–90 − 0–30 (bp of NAV)",
+        "delta_more": ("0–90 pays more", "0–30 pays more"),
+        "caption": ("0% TER, rolling T-bill ladders. Source: FRED daily T-bill "
+                    "rates (DTB3, DTB4WK). 0–30 DTM proxied before Jul-2001 — "
+                    "see MMF_SUMMARY.md."),
+    },
+    {
+        "name": "mmf_0dtm_compare",
+        "A": ("0dtm_fed_funds", "fed funds (benchmark)"), "B": ("0dtm", "SOFR — 0DTM cash"),
+        "split": datetime(2018, 4, 1), "split_note": "SOFR: proxied ← | → observed",
+        "price_ylim": (99.5, 100.5), "price_yticks": [99.5, 100, 100.5],
+        "titles": ("Overnight cash NAV — fed funds vs SOFR  (flat: zero duration)",
+                   "Annual coupon rate — fed funds vs SOFR",
+                   "Monthly coupon delta — fed funds minus SOFR"),
+        "delta_ylabel": "Monthly coupon Δ\nfed funds − SOFR (bp of NAV)",
+        "delta_more": ("fed funds pays more", "SOFR pays more"),
+        "caption": ("0% TER overnight cash, flat NAV. Source: FRED DFF (fed "
+                    "funds), SOFR. SOFR proxied before Apr-2018 — see "
+                    "MMF_SUMMARY.md."),
+    },
+]
 
 
 def load(key):
     rows = list(csv.DictReader(open(os.path.join(ROOT, f"mmf_{key}.csv"))))
     x = [datetime(int(r["yyyymm"]) // 100, int(r["yyyymm"]) % 100, 1) for r in rows]
     price = [float(r["price_idx"]) for r in rows]
-    coupon_a = [float(r["coupon_rate_annual"]) * 100.0 for r in rows]      # percent
-    coupon_m = [float(r["coupon_rate_monthly"]) for r in rows]             # fraction
+    coupon_a = [float(r["coupon_rate_annual"]) * 100.0 for r in rows]   # percent
+    coupon_m = [float(r["coupon_rate_monthly"]) for r in rows]          # fraction
     return x, price, coupon_a, coupon_m
 
 
-def main():
-    x, p90, ca90, cm90 = load("0_90dtm")
-    _, p30, ca30, cm30 = load("0_30dtm")
-    delta_bp = np.array([(a - b) * 1e4 for a, b in zip(cm90, cm30)])  # monthly, bp of NAV
+def build_fig(cfg):
+    (kA, lA), (kB, lB) = cfg["A"], cfg["B"]
+    x, pA, caA, cmA = load(kA)
+    _, pB, caB, cmB = load(kB)
+    delta_bp = np.array([(a - b) * 1e4 for a, b in zip(cmA, cmB)])
+    split = cfg["split"]
+    ylo, yhi = cfg["price_ylim"]
+    note_y = yhi - 0.03 * (yhi - ylo)
 
-    plt.rcParams.update({
-        "figure.facecolor": SURFACE, "axes.facecolor": SURFACE,
-        "text.color": INK, "axes.labelcolor": INK2,
-        "xtick.color": MUTED, "ytick.color": MUTED,
-        "font.family": "sans-serif", "font.size": 10,
-    })
     fig, (ax1, ax2, ax3) = plt.subplots(
         3, 1, sharex=True, figsize=(11, 11.6),
         gridspec_kw={"hspace": 0.17, "height_ratios": [1.05, 1.05, 0.8]})
 
-    # --- pane 1: price index, semilog ------------------------------------
+    # pane 1: price index, semilog
     ax1.set_yscale("log")
-    ax1.plot(x, p90, color=C90, lw=1.8, label="0–90 DTM")
-    ax1.plot(x, p30, color=C30, lw=1.8, label="0–30 DTM")
-    ax1.set_ylim(98.2, 100.7)
-    ax1.set_yticks([98.5, 99, 99.5, 100, 100.5])
+    ax1.plot(x, pA, color=CA, lw=1.8, label=lA)
+    ax1.plot(x, pB, color=CB, lw=1.8, label=lB)
+    ax1.set_ylim(ylo, yhi)
+    ax1.set_yticks(cfg["price_yticks"])
     ax1.yaxis.set_major_formatter(ScalarFormatter())
     ax1.yaxis.set_minor_formatter(NullFormatter())
     ax1.minorticks_off()
     ax1.set_ylabel("Price / NAV index\n(=100 @ 1972, log scale)")
-    ax1.set_title("Money-market fund price index — 0–30 vs 0–90 DTM",
-                  loc="left", color=INK, fontsize=12.5, fontweight="bold", pad=8)
+    ax1.set_title(cfg["titles"][0], loc="left", color=INK, fontsize=12.5,
+                  fontweight="bold", pad=8)
     ax1.legend(frameon=False, loc="upper left", labelcolor=INK2)
-    ax1.text(SPLIT, 100.62, "  0–30 DTM: proxied ← | → observed", color=MUTED,
+    ax1.text(split, note_y, "  " + cfg["split_note"], color=MUTED,
              fontsize=8.5, va="top", ha="left")
 
-    # --- pane 2: annual coupon rate, linear ------------------------------
-    ax2.plot(x, ca90, color=C90, lw=1.8, label="0–90 DTM")
-    ax2.plot(x, ca30, color=C30, lw=1.8, label="0–30 DTM")
+    # pane 2: annual coupon rate, linear
+    ax2.plot(x, caA, color=CA, lw=1.8, label=lA)
+    ax2.plot(x, caB, color=CB, lw=1.8, label=lB)
     ax2.set_ylim(0, None)
     ax2.set_ylabel("Coupon rate, annual (%)")
-    ax2.set_title("Annual coupon rate — 0–30 vs 0–90 DTM",
-                  loc="left", color=INK, fontsize=12.5, fontweight="bold", pad=8)
+    ax2.set_title(cfg["titles"][1], loc="left", color=INK, fontsize=12.5,
+                  fontweight="bold", pad=8)
     ax2.legend(frameon=False, loc="upper right", labelcolor=INK2)
 
-    # --- pane 3: monthly coupon delta (0-90 - 0-30), linear, diverging ---
+    # pane 3: monthly coupon delta (A - B), diverging
     ax3.axhline(0, color=AXIS, lw=0.8)
     ax3.fill_between(x, 0, delta_bp, where=delta_bp >= 0, interpolate=True,
-                     color=C90, alpha=0.55, linewidth=0)
+                     color=CA, alpha=0.55, linewidth=0)
     ax3.fill_between(x, 0, delta_bp, where=delta_bp <= 0, interpolate=True,
                      color=CRED, alpha=0.55, linewidth=0)
     ax3.plot(x, delta_bp, color=INK2, lw=0.7)
-    ax3.set_ylabel("Monthly coupon Δ\n0–90 − 0–30 (bp of NAV)")
+    ax3.set_ylabel(cfg["delta_ylabel"])
     ax3.set_xlabel("Year")
-    ax3.set_title("Monthly coupon delta — 0–90 minus 0–30",
-                  loc="left", color=INK, fontsize=12.5, fontweight="bold", pad=8)
-    ax3.legend(handles=[Patch(color=C90, alpha=0.55, label="0–90 pays more"),
-                        Patch(color=CRED, alpha=0.55, label="0–30 pays more")],
+    ax3.set_title(cfg["titles"][2], loc="left", color=INK, fontsize=12.5,
+                  fontweight="bold", pad=8)
+    ax3.legend(handles=[Patch(color=CA, alpha=0.55, label=cfg["delta_more"][0]),
+                        Patch(color=CRED, alpha=0.55, label=cfg["delta_more"][1])],
                frameon=False, loc="upper right", labelcolor=INK2, ncol=2, fontsize=8.5)
 
-    # --- shared x + proxy marker on every pane ---------------------------
+    # shared x + proxy marker on every pane
     ax3.xaxis.set_major_locator(YearLocator(5))
     ax3.xaxis.set_major_formatter(DateFormatter("%Y"))
     for ax in (ax1, ax2, ax3):
-        ax.axvline(SPLIT, color=MUTED, ls=(0, (4, 3)), lw=0.9, alpha=0.7)
+        ax.axvline(split, color=MUTED, ls=(0, (4, 3)), lw=0.9, alpha=0.7)
         ax.grid(True, color=GRID, lw=0.6)
         ax.set_axisbelow(True)
         for side in ("top", "right"):
@@ -120,17 +153,21 @@ def main():
             ax.spines[side].set_color(AXIS)
         ax.tick_params(colors=MUTED)
 
-    fig.text(0.008, 0.006,
-             "0% TER, rolling T-bill ladders. Source: FRED daily T-bill rates "
-             "(DTB3, DTB4WK). 0–30 DTM proxied before Jul-2001 — see MMF_SUMMARY.md.",
-             color=MUTED, fontsize=8)
-
-    stamp = datetime.now().strftime("%Y%m%d_%H%M")   # fetched right before writing
-    for path in (os.path.join(ROOT, "mmf_chart.png"),
-                 os.path.join(OUTD, f"{stamp}_mmf_chart.png")):
-        fig.savefig(path, dpi=140, facecolor=SURFACE, bbox_inches="tight")
-    print(f"wrote mmf_chart.png (+ output/{stamp}_mmf_chart.png)")
+    fig.text(0.008, 0.006, cfg["caption"], color=MUTED, fontsize=8)
+    return fig
 
 
 if __name__ == "__main__":
-    main()
+    plt.rcParams.update({
+        "figure.facecolor": SURFACE, "axes.facecolor": SURFACE,
+        "text.color": INK, "axes.labelcolor": INK2,
+        "xtick.color": MUTED, "ytick.color": MUTED,
+        "font.family": "sans-serif", "font.size": 10,
+    })
+    figs = [(cfg, build_fig(cfg)) for cfg in CHARTS]
+    stamp = datetime.now().strftime("%Y%m%d_%H%M")   # fetched right before writing
+    for cfg, fig in figs:
+        for path in (os.path.join(ROOT, f"{cfg['name']}.png"),
+                     os.path.join(OUTD, f"{stamp}_{cfg['name']}.png")):
+            fig.savefig(path, dpi=140, facecolor=SURFACE, bbox_inches="tight")
+        print(f"wrote {cfg['name']}.png (+ output/{stamp}_{cfg['name']}.png)")

@@ -1,18 +1,25 @@
 # MM-backtest
 
 Synthetic monthly **total-return and price series for 0% TER money-market funds**
-holding short-dated U.S. Treasury bills, from **January 1972**. Built from public
-Federal Reserve (FRED) daily bill rates — no paid data feed required.
+holding short-dated U.S. Treasuries / cash, from **January 1972**. Built from
+public Federal Reserve (FRED) daily rates — no paid data feed required.
 
 ## The series
 
-Canonical latest files live at the repo root; both are monthly, share one date
+Canonical latest files live at the repo root; all are monthly, share one date
 grid, and align row-for-row:
 
-| File | Fund | Buys | Avg life |
+| File | Fund | Rate | Avg life |
 |---|---|---|---|
 | [`mmf_0_90dtm.csv`](mmf_0_90dtm.csv) | 0–90 DTM T-bills | 13-week bills | ~45 days |
 | [`mmf_0_30dtm.csv`](mmf_0_30dtm.csv) | 0–30 DTM T-bills | 4-week bills | ~15 days |
+| [`mmf_0dtm.csv`](mmf_0dtm.csv) | **Overnight cash (canonical, holdable)** — secured Treasury repo | SOFR (2018+; proxied before) | 0 (flat NAV) |
+| [`mmf_0dtm_fed_funds.csv`](mmf_0dtm_fed_funds.csv) | Overnight fed funds — *benchmark only* | effective fed funds | 0 (flat NAV) |
+
+For "cash," hold **`mmf_0dtm`** (SOFR) — it's what a government money-market fund
+earns. `mmf_0dtm_fed_funds` is the unsecured interbank rate, a benchmark you can't
+directly hold. Both are flat-NAV and yield slightly *above* the bills (the T-bill
+safety premium).
 
 Columns: `yyyymm`, `price_idx` (distributing NAV, =100 @ Jan-1972), `coupon_rate_monthly`,
 `coupon_rate_annual` (=`coupon_rate_monthly × 12`), `tr_idx` (accumulating, =100 @ Aug-2002 splice).
@@ -25,15 +32,23 @@ Columns: `yyyymm`, `price_idx` (distributing NAV, =100 @ Jan-1972), `coupon_rate
 > build 0–30-vs-0–90 spread/relative-value signals on that window. See
 > [`MMF_SUMMARY.md`](MMF_SUMMARY.md).
 
-## Chart
+## Charts
 
-![0–30 vs 0–90 DTM — price index (semilog), annual coupon rate, and monthly coupon delta](mmf_chart.png)
+Two 3-pane comparisons (price/NAV semilog · annual coupon · monthly coupon delta),
+shared time axis:
 
-Three panes on a shared time axis: **(1)** price/NAV index, log scale (both stay
-near 100; the 0–90 fund swings ~3× wider — more duration); **(2)** annual coupon
-rate (near-identical — the front bill curve is flat); **(3)** the monthly coupon
-delta, 0–90 − 0–30 (bp of NAV) — flat near zero except during sharp rate moves.
-The dashed line marks Jul-2001, before which the 0–30 series is proxied.
+**Bill funds — 0–30 vs 0–90 DTM** — [`mmf_30-90DTM_compare.png`](mmf_30-90DTM_compare.png)
+
+![0–30 vs 0–90 DTM — price index, coupon rate, coupon delta](mmf_30-90DTM_compare.png)
+
+**Overnight cash — fed funds vs SOFR** — [`mmf_0dtm_compare.png`](mmf_0dtm_compare.png)
+
+![fed funds vs SOFR — flat NAV, coupon rate, fed funds − SOFR delta](mmf_0dtm_compare.png)
+
+Bill panes: the 0–90 NAV swings ~3× wider (more duration); coupons near-identical
+(flat front curve); dashed line = Jul-2001 (0–30 proxied before). Cash panes: NAV
+flat at 100 (zero duration); the delta surfaces the Sept-2019 repo spike; dashed
+line = Apr-2018 (SOFR proxied before).
 
 ## Documentation
 
@@ -44,17 +59,17 @@ The dashed line marks Jul-2001, before which the 0–30 series is proxied.
 
 ```bash
 # refetch FRED inputs (optional — already in data/)
-for id in DTB3 DTB4WK DFF; do
+for id in DTB3 DTB4WK DFF SOFR; do
   curl -sSL "https://fred.stlouisfed.org/graph/fredgraph.csv?id=$id" -o data/$id.csv
 done
 python3 scripts/build_mmf.py            # series CSVs (pure Python, no deps)
-.venv/bin/python3 scripts/plot_mmf.py   # mmf_chart.png (needs matplotlib)
+.venv/bin/python3 scripts/plot_mmf.py   # comparison charts (needs matplotlib)
 ```
 
 The series builder writes the canonical CSVs to the repo root plus a
 **timestamped** snapshot `output/<YYYYMMDD_HHMM>_mmf_<fund>.csv` (the stamp is
-taken at write time). `plot_mmf.py` likewise writes `mmf_chart.png` at the root
-and a timestamped copy in `output/`. Add a maturity bucket by appending
+taken at write time). `plot_mmf.py` likewise writes the two `*_compare.png`
+charts at the root and timestamped copies in `output/`. Add a maturity bucket by appending
 `{key, tenor, max_dtm}` to the `FUNDS` table in
 [`scripts/build_mmf.py`](scripts/build_mmf.py).
 
@@ -68,10 +83,10 @@ python3 -m venv .venv && .venv/bin/python3 -m pip install matplotlib
 
 | Path | Purpose |
 |---|---|
-| `mmf_0_90dtm.csv`, `mmf_0_30dtm.csv` | Canonical latest series (repo root). |
-| `mmf_chart.png` | Canonical latest 2-pane comparison chart (repo root). |
+| `mmf_0_90dtm.csv`, `mmf_0_30dtm.csv`, `mmf_0dtm.csv`, `mmf_0dtm_fed_funds.csv` | Canonical latest series (repo root). |
+| `mmf_30-90DTM_compare.png`, `mmf_0dtm_compare.png` | Canonical latest 3-pane comparison charts (repo root). |
 | `scripts/build_mmf.py`, `scripts/plot_mmf.py` | Series builder and chart renderer. |
-| `data/` | Raw FRED inputs (`DTB3`, `DTB4WK`, `DFF`). |
+| `data/` | Raw FRED inputs (`DTB3`, `DTB4WK`, `DFF`, `SOFR`). |
 | `output/` | Timestamped build-history snapshots (`YYYYMMDD_HHMM_mmf_*`). |
 | `docs/`, `MMF_SUMMARY.md` | Methodology and consumer summary. |
 | `PROGRESS.md` | Session handoff (printed into context at startup). |
