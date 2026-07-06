@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """
 Build synthetic monthly series for 0% TER money-market funds that hold
-0-N DTM (days-to-maturity) U.S. Treasury bills, from January 1972.
+0-N DTM (days-to-maturity) U.S. Treasury bills.  The build window (inclusive
+start/end YYYYMM) is read from repo-root build_range.json — the single source
+of truth; there are no hardcoded start/end dates in this script.
 
 Emits, for each fund in the FUNDS table below, TWO copies:
     <repo-root>/mmf_<key>.csv                 canonical latest series (consumers read this)
@@ -31,8 +33,10 @@ uniformly over 0-N days:
 
 Two share classes off the SAME book, linked by the exact identity
       tr_return[t] = price_return[t] + coupon_rate_monthly[t] :
-    price_idx  distributing NAV (coupons removed, marks to market), 100 @ 1972
-    tr_idx     accumulating    (coupons reinvested), 100 @ the Aug-2002 splice
+    price_idx  distributing NAV (coupons removed, marks to market), 100 @ START_YM
+    tr_idx     accumulating    (coupons reinvested), also 100 @ START_YM
+both indices are based at the build-window start (build_range.json) — no magic
+anchor date.
 
 ==========================================================================
 INPUTS  (public FRED daily discount rates, %, converted to bond-equivalent)
@@ -47,7 +51,8 @@ INPUTS  (public FRED daily discount rates, %, converted to bond-equivalent)
 PRE-2001 PROXY (0-30 fund only)
 -------------------------------
 The Treasury did not auction 4-week bills before Jul-2001, so no 1-month
-series exists for 1972..2001-06.  There the 4-week DISCOUNT rate is proxied as
+series exists from the build start (build_range.json) through 2001-06.  There
+the 4-week DISCOUNT rate is proxied as
     d_4wk(t) = d_3mo(t) - mean(d_3mo - d_4wk over the 2001-07+ overlap)
 (the month-average and month-end spreads are measured and applied separately).
 
@@ -55,7 +60,8 @@ Consequence, documented in docs/mmf_methodology.md: pre-2001 the 0-30 fund is
 the SAME 3-month rate signal run through genuine 0-30 conventions (shorter
 1-month income-smoothing window + 28-day yield conversion).  It is therefore
 meaningfully lower-yielding and more responsive than the 0-90 fund
-(cumulatively ~ -4.3% of carry over 1972-2001) but carries little information
+(cumulatively a few % of carry over the proxied pre-2001 span) but carries
+little information
 INDEPENDENT of it: the real 1M-3M spread volatility (+/-35..93 bp post-2001)
 is flattened to a constant.  Treat pre-200107 0-30 vs 0-90 month-to-month
 divergences as structural-model output, not observed market data.
@@ -65,6 +71,7 @@ replace that fund's tr_idx with a genuine external total-return index.
 """
 
 import csv
+import json
 import math
 import os
 from datetime import datetime
@@ -74,9 +81,17 @@ ROOT = os.path.join(HERE, "..")            # repo root: canonical latest series
 DATA = os.path.join(HERE, "..", "data")
 OUTD = os.path.join(HERE, "..", "output")  # build-history snapshots
 
-START_YM  = 197201
-SPLICE_YM = 200208
-MIN_OBS   = 10          # drop a trailing partial month
+
+def load_build_range():
+    """Single source of truth for the build window (repo-root build_range.json).
+    Returns (start_ym, end_ym) as inclusive YYYYMM ints."""
+    with open(os.path.join(ROOT, "build_range.json")) as fh:
+        r = json.load(fh)
+    return int(r["start_month"]), int(r["end_month"])
+
+
+START_YM, END_YM = load_build_range()   # the ONLY start/end dates — no magic literals
+MIN_OBS   = 10          # drop a partial month (data-quality gate, not a date)
 DAYS_360  = 360.0
 DAYS_365  = 365.0
 
@@ -176,7 +191,7 @@ def load_override(key):
 
 
 def build_fund(disc, tenor, max_dtm, key):
-    months = sorted(m for m in disc if m >= START_YM)
+    months = sorted(m for m in disc if START_YM <= m <= END_YM)
     y_avg = {m: investment_yield(disc[m][0], tenor) for m in months}
     y_eom = {m: investment_yield(disc[m][1], tenor) for m in months}
     d_mod = (max_dtm / 2.0) / DAYS_365                 # avg-life duration (yr)
@@ -196,13 +211,13 @@ def build_fund(disc, tenor, max_dtm, key):
                     "tr_raw": tr_raw})
         prev_eom = y_eom[m]
 
-    base = next(r["tr_raw"] for r in out if r["yyyymm"] == SPLICE_YM)
+    base = out[0]["tr_raw"]        # tr_idx = 100 @ the build-window start (build_range.json)
     for r in out:
         r["tr_idx"] = r["tr_raw"] / base * 100.0
 
     override = load_override(key)
     if override:
-        ob = override[SPLICE_YM]
+        ob = override[min(override)]   # rebase the external index to its own earliest month
         for r in out:
             if r["yyyymm"] in override:
                 r["tr_idx"] = override[r["yyyymm"]] / ob * 100.0

@@ -1,8 +1,10 @@
 # MM-backtest
 
 Synthetic monthly **total-return and price series for 0% TER money-market funds**
-holding short-dated U.S. Treasuries / cash, from **January 1972**. Built from
-public Federal Reserve (FRED) daily rates — no paid data feed required.
+holding short-dated U.S. Treasuries / cash. The build window is set in
+[`build_range.json`](build_range.json) (`start_month` / `end_month`, inclusive
+`YYYYMM`) — currently **Jan 1970 → May 2026** (677 months). Built from public
+Federal Reserve (FRED) daily rates — no paid data feed required.
 
 ## The series
 
@@ -21,9 +23,11 @@ earns. `mmf_0dtm_fed_funds` is the unsecured interbank rate, a benchmark you can
 directly hold. Both are flat-NAV and yield slightly *above* the bills (the T-bill
 safety premium).
 
-Columns: `yyyymm`, `price_idx` (distributing NAV, =100 @ Jan-1972), `coupon_rate_monthly`,
-`coupon_rate_annual` (=`coupon_rate_monthly × 12`), `tr_idx` (accumulating, =100 @ Aug-2002 splice).
-`price_idx` and `tr_idx` are two share classes of the same portfolio (`tr_return = price_return + coupon`).
+Columns: `yyyymm`, `price_idx` (distributing NAV, =100 @ the build-window start),
+`coupon_rate_monthly`, `coupon_rate_annual` (=`coupon_rate_monthly × 12`), `tr_idx`
+(accumulating, also =100 @ the build-window start). Both indices are based at
+`start_month` from [`build_range.json`](build_range.json); `price_idx` and `tr_idx`
+are two share classes of the same portfolio (`tr_return = price_return + coupon`).
 
 > [!WARNING]
 > The **0–30 fund before July 2001 is proxied** — 4-week bills didn't exist then.
@@ -69,8 +73,9 @@ python3 scripts/build_mmf.py            # series CSVs (pure Python, no deps)
 The series builder writes the canonical CSVs to the repo root plus a
 **timestamped** snapshot `output/<YYYYMMDD_HHMM>_mmf_<fund>.csv` (the stamp is
 taken at write time). `plot_mmf.py` likewise writes the two `*_compare.png`
-charts at the root and timestamped copies in `output/`. Add a maturity bucket by appending
-`{key, tenor, max_dtm}` to the `FUNDS` table in
+charts at the root and timestamped copies in `output/`. Change the start/end months
+by editing [`build_range.json`](build_range.json) and rerunning the builder. Add a
+maturity bucket by appending `{key, tenor, max_dtm}` to the `FUNDS` table in
 [`scripts/build_mmf.py`](scripts/build_mmf.py).
 
 The series builder is dependency-free Python 3; charting needs matplotlib:
@@ -85,6 +90,7 @@ python3 -m venv .venv && .venv/bin/python3 -m pip install matplotlib
 |---|---|
 | `mmf_0_90dtm.csv`, `mmf_0_30dtm.csv`, `mmf_0dtm.csv`, `mmf_0dtm_fed_funds.csv` | Canonical latest series (repo root). |
 | `mmf_30-90DTM_compare.png`, `mmf_0dtm_compare.png` | Canonical latest 3-pane comparison charts (repo root). |
+| `build_range.json` | Single source of truth for the build window (`start_month` / `end_month`). |
 | `scripts/build_mmf.py`, `scripts/plot_mmf.py` | Series builder and chart renderer. |
 | `data/` | Raw FRED inputs (`DTB3`, `DTB4WK`, `DFF`, `SOFR`). |
 | `output/` | Timestamped build-history snapshots (`YYYYMMDD_HHMM_mmf_*`). |

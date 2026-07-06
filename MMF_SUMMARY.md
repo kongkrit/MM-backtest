@@ -1,8 +1,9 @@
 # MMF series — consumer summary
 
 Synthetic **0% TER** (no fee drag) money-market fund series: two rolling **T-bill**
-ladders and two **overnight-cash** funds. Monthly, **Jan 1972 → Jun 2026** (654
-rows each; extends as new months are added).
+ladders and two **overnight-cash** funds. Monthly, **Jan 1970 → May 2026** (677
+rows each). The build window is the single source of truth in `build_range.json`
+at the repo root (`start_month` / `end_month`, inclusive `YYYYMM`).
 
 ## Files
 
@@ -30,11 +31,11 @@ overnight note below), so this choice is about correctness, not magnitude.
 
 | Column | Meaning |
 |---|---|
-| `yyyymm` | Month key, integer (e.g. `200208` = Aug 2002). |
-| `price_idx` | Price/NAV index of the **distributing** class (coupons paid out). **= 100 at Jan-1972.** Bills wiggle with yields; the cash funds are **flat 100** (zero duration). |
+| `yyyymm` | Month key, integer (e.g. `197001` = Jan 1970). |
+| `price_idx` | Price/NAV index of the **distributing** class (coupons paid out). **= 100 at the build-window start (Jan-1970).** Bills wiggle with yields; the cash funds are **flat 100** (zero duration). |
 | `coupon_rate_monthly` | Monthly coupon as a fraction of NAV (decimal) — cash a distributing holder receives for that month. |
 | `coupon_rate_annual` | `coupon_rate_monthly × 12` (simple annualized, not compounded). |
-| `tr_idx` | Total-return index — **accumulating** (coupons reinvested). **= 100 at the Aug-2002 splice.** |
+| `tr_idx` | Total-return index — **accumulating** (coupons reinvested). **= 100 at the same build-window start (Jan-1970).** |
 
 **Timing.** Row `YYYYMM` is *as of month-end*. `price_idx` is the NAV mark at the
 last trading day; `coupon_rate_*` is the income earned over the month and **paid at
@@ -45,12 +46,12 @@ only for the price mark.)
 
 ## At a glance
 
-| Fund | tr_idx 1972 → 2026 | TR CAGR | price_idx |
+| Fund | tr_idx 1970 → 2026 | TR CAGR | price_idx |
 |---|---|---|---|
-| 0–90 DTM (bills) | 12.82 → 150.75 | 4.63% | 98.41 – 100.41 |
-| 0–30 DTM (bills) | 13.44 → 148.75 | 4.51% | 99.49 – 100.14 |
-| **0DTM cash — SOFR** (`mmf_0dtm`) | 10.70 → 154.02 | **5.02%** | flat 100 |
-| 0DTM fed funds (benchmark) | 10.69 → 154.12 | 5.02% | flat 100 |
+| 0–90 DTM (bills) | 100.00 → 1316.39 | 4.67% | 98.98 – 101.00 |
+| 0–30 DTM (bills) | 100.00 → 1226.84 | 4.54% | 99.67 – 100.33 |
+| **0DTM cash — SOFR** (`mmf_0dtm`) | 100.00 → 1610.30 | **5.05%** | flat 100 |
+| 0DTM fed funds (benchmark) | 100.00 → 1612.81 | 5.05% | flat 100 |
 
 Among the **bills**, shorter = a bit less yield and a steadier NAV. The
 **overnight-cash** funds yield *more* than the bills (see the note below) — the
@@ -71,7 +72,7 @@ the files at the repo root.
 ## ⚠️ Caution 1 — the 0–30 DTM series before July 2001
 
 4-week Treasury bills did not exist before the Treasury began auctioning them in
-**July 2001**. For **1972 → June 2001** the 0–30 series is **modeled from 3-month
+**July 2001**. For **1970 → June 2001** the 0–30 series is **modeled from 3-month
 bill data**, not observed 1-month bills.
 
 - **From 2001-07 onward:** fully real — use freely, including the 0–30 vs 0–90 difference.
@@ -81,14 +82,14 @@ bill data**, not observed 1-month bills.
   1M-vs-3M spread is assumed constant). Don't build 0–30-vs-0–90 spread/relative-value
   signals on that window; use 0–90 alone there, or start at 2001-07.
 
-The 0–90 fund has **no such caveat** — real 3-month bill data across the full 1972+ history.
+The 0–90 fund has **no such caveat** — real 3-month bill data across the full 1970+ history.
 
 ## ⚠️ Caution 2 — the overnight "cash" funds
 
 `mmf_0dtm` (SOFR) and `mmf_0dtm_fed_funds` are overnight cash with a **flat NAV
 (=100)** — zero duration, so all return is coupon.
 
-- **They yield *above* the bills** (CAGR ~5.0% vs 4.5–4.6%). That's the T-bill
+- **They yield *above* the bills** (CAGR ~5.0% vs 4.5–4.7%). That's the T-bill
   safety/liquidity premium — Treasuries yield less than equally-short cash — not a
   bug. Overnight cash is **not** a lower-yielding "shorter tier" than the bills.
 - **SOFR ≈ fed funds:** mean gap **+0.3 bp** over 2018-04+ (their real overlap); the

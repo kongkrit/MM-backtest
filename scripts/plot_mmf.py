@@ -51,7 +51,6 @@ CHARTS = [
         "name": "mmf_30-90DTM_compare",
         "A": ("0_90dtm", "0–90 DTM"), "B": ("0_30dtm", "0–30 DTM"),
         "split": datetime(2001, 7, 1), "split_note": "0–30 DTM: proxied ← | → observed",
-        "price_ylim": (98.2, 100.7), "price_yticks": [98.5, 99, 99.5, 100, 100.5],
         "titles": ("Money-market fund price index — 0–30 vs 0–90 DTM",
                    "Annual coupon rate — 0–30 vs 0–90 DTM",
                    "Monthly coupon delta — 0–90 minus 0–30"),
@@ -65,7 +64,6 @@ CHARTS = [
         "name": "mmf_0dtm_compare",
         "A": ("0dtm_fed_funds", "fed funds (benchmark)"), "B": ("0dtm", "SOFR — 0DTM cash"),
         "split": datetime(2018, 4, 1), "split_note": "SOFR: proxied ← | → observed",
-        "price_ylim": (99.5, 100.5), "price_yticks": [99.5, 100, 100.5],
         "titles": ("Overnight cash NAV — fed funds vs SOFR  (flat: zero duration)",
                    "Annual coupon rate — fed funds vs SOFR",
                    "Monthly coupon delta — fed funds minus SOFR"),
@@ -87,13 +85,27 @@ def load(key):
     return x, price, coupon_a, coupon_m
 
 
+def price_window(*series):
+    """Data-derived y-window + ticks for the price pane — no hardcoded limits.
+    Tight to the data (12% margin) but at least ±0.5 around the midpoint so a
+    flat, zero-duration cash NAV still reads as flat-at-100. Ticks on a clean
+    0.5 grid inside the window."""
+    lo = min(min(s) for s in series)
+    hi = max(max(s) for s in series)
+    mid = (lo + hi) / 2.0
+    half = max((hi - lo) / 2.0 * 1.12, 0.5)
+    ylo, yhi = mid - half, mid + half
+    ticks = list(np.arange(np.ceil(ylo / 0.5) * 0.5, yhi + 1e-9, 0.5))
+    return ylo, yhi, ticks
+
+
 def build_fig(cfg):
     (kA, lA), (kB, lB) = cfg["A"], cfg["B"]
     x, pA, caA, cmA = load(kA)
     _, pB, caB, cmB = load(kB)
     delta_bp = np.array([(a - b) * 1e4 for a, b in zip(cmA, cmB)])
     split = cfg["split"]
-    ylo, yhi = cfg["price_ylim"]
+    ylo, yhi, price_yticks = price_window(pA, pB)
     note_y = yhi - 0.03 * (yhi - ylo)
 
     fig, (ax1, ax2, ax3) = plt.subplots(
@@ -105,11 +117,11 @@ def build_fig(cfg):
     ax1.plot(x, pA, color=CA, lw=1.8, label=lA)
     ax1.plot(x, pB, color=CB, lw=1.8, label=lB)
     ax1.set_ylim(ylo, yhi)
-    ax1.set_yticks(cfg["price_yticks"])
+    ax1.set_yticks(price_yticks)
     ax1.yaxis.set_major_formatter(ScalarFormatter())
     ax1.yaxis.set_minor_formatter(NullFormatter())
     ax1.minorticks_off()
-    ax1.set_ylabel("Price / NAV index\n(=100 @ 1972, log scale)")
+    ax1.set_ylabel(f"Price / NAV index\n(=100 @ {x[0].year}, log scale)")
     ax1.set_title(cfg["titles"][0], loc="left", color=INK, fontsize=12.5,
                   fontweight="bold", pad=8)
     ax1.legend(frameon=False, loc="upper left", labelcolor=INK2)
