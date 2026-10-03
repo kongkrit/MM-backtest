@@ -133,11 +133,3 @@ python3 scripts/build_mmf.py            # series CSVs (pure Python)
 ```
 
 Add a fund by appending `{key, tenor, max_dtm}` to `FUNDS` in the script.
-
-## External total-return override (e.g. LSEG/Datastream)
-
-Drop `data/lseg_<key>_tr.csv` with columns `yyyymm,value` (a genuine
-total-return index) and that fund's `tr_idx` is replaced by it, rescaled to its
-own earliest month = 100; the FRED build still supplies `price_idx`/coupon columns. The
-LSEG MCP connector could not be reached in this build (it needs interactive
-OAuth); this hook lets a genuine index slot in once available.

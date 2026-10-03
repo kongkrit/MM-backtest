@@ -80,11 +80,11 @@ python3 scripts/build_mmf.py            # series CSVs (pure Python, no deps)
 .venv/bin/python3 scripts/plot_mmf.py   # comparison charts (needs matplotlib)
 ```
 
-The fetcher downloads the full history of `DTB3`, `DTB4WK`, `DFF` and `SOFR`,
-validates each download (header, dates, no truncated or shrinking history), and
-only then replaces all four files in `data/` — on any failure `data/` is left
-untouched. It reports each series' new last date, rows added, and any revised
-past values.
+The fetcher downloads the full history of `DTB3`, `DTB4WK`, `DFF` and `SOFR`.
+It writes nothing unless every download has the expected header and at least as
+many rows as the current file, so an error page or cut-off download can't replace
+good data. It prints each series' new last date and rows added; any FRED revisions
+to past values show up in `git diff data/`.
 
 The series builder writes the canonical CSVs to the repo root plus a
 **timestamped** snapshot `output/<YYYYMMDD_HHMM>_mmf_<fund>.csv` (the stamp is
@@ -111,16 +111,12 @@ python3 -m venv .venv && .venv/bin/python3 -m pip install matplotlib
 | `mmf_30-90DTM_compare.png`, `mmf_0dtm_compare.png` | Canonical latest 3-pane comparison charts (repo root). |
 | `build_range.json` | Single source of truth for the build-window start (`start_month`); the end is the last complete month before the build date. |
 | `scripts/rebuild.sh`, `.claude/commands/rebuild.md` | One-shot fetch → build → plot (`/rebuild` in Claude Code). |
-| `scripts/fetch_fred.py` | Refreshes the FRED inputs in `data/` (all-or-nothing, validated). |
+| `scripts/fetch_fred.py` | Refreshes the FRED inputs in `data/` (writes only if every download looks complete). |
 | `scripts/build_mmf.py`, `scripts/plot_mmf.py` | Series builder and chart renderer. |
 | `data/` | Raw FRED inputs (`DTB3`, `DTB4WK`, `DFF`, `SOFR`). |
 | `output/` | Timestamped build-history snapshots (`YYYYMMDD_HHMM_mmf_*`). |
 | `docs/`, `MMF_SUMMARY.md` | Methodology and consumer summary. |
 | `PROGRESS.md` | Session handoff (printed into context at startup). |
-
-**External TR override:** drop `data/lseg_<key>_tr.csv` (`yyyymm,value`) to replace a
-fund's `tr_idx` with a genuine index (e.g. LSEG/Datastream); the FRED build still
-supplies the price/coupon columns.
 
 ## Development setup (Debian)
 

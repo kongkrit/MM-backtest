@@ -10,6 +10,40 @@ benchmark) — from public FRED daily rates, Jan 1970 through the last complete 
 canonical CSVs at the repo root; [MMF_SUMMARY.md](MMF_SUMMARY.md) explains *what* they are,
 [docs/mmf_methodology.md](docs/mmf_methodology.md) explains *how*.
 
+## Code principles — IMPORTANT
+
+**All code MUST be SIMPLE, MINIMAL, EASY TO UNDERSTAND, and DRY.** These rules come before cleverness, speculative flexibility, and personal style.
+
+- **Simple:** use the most straightforward approach that works. No clever tricks, premature abstraction, or premature optimization.
+- **Minimal:** write only what the task needs. No speculative features, unused options, or "just in case" code. Fewer lines, files, and dependencies win. Delete dead code.
+- **Easy to understand:** a newcomer should follow it on first read. Clear names, small functions, shallow nesting, obvious control flow.
+- **DRY:** one source of truth for each piece of logic, data, and config. Search for existing code to reuse before writing new code; never copy-paste logic. Extract it once instead.
+- **When in doubt, choose the simpler option.** Before finishing, re-read your diff and cut anything that isn't needed.
+
+## How to explain things
+
+These rules apply to explanations to the user and to code comments, not to commit messages.
+
+For code comments:
+- Explain why and the mechanism; don't restate what the code plainly does.
+- Define a term once, at its first use in the file.
+- Add a worked numeric example only for non-obvious math (scaling, units, bit layouts).
+- Keep comments as short as the point allows; "Simple", "Minimal", "Easy to understand", and "DRY" still applies.
+
+Audience: someone with a BS in EE who remembers the fundamentals (circuits, signals, calculus, basic probability and statistics) but not every formula or every field's jargon. Write for a sharp engineer outside the specialty.
+
+Goal: as simple as possible, without saying anything false.
+
+1. Start with the plain-language answer in 1-2 sentences, then the reasoning.
+2. Explain the mechanism (what causes what) in words before any math.
+3. Define each technical term the first time it appears, in a short phrase. Introduce as few new terms as possible.
+4. Use an equation only when it makes the point clearer than words. If you use one, define every symbol and show one worked example with real numbers.
+5. Prefer a concrete numeric example over abstract notation.
+6. Use an analogy (EE analogies are welcome) only if it maps accurately, and say where it breaks down.
+7. When you simplify, say what you left out and when it would matter.
+8. No handwaving: back each claim with a reason, a number, or a source. If the answer depends on something, say what. If unsure, say so.
+9. Before sending, check: could I follow this on the first read without looking anything up? If not, rewrite it.
+
 ## Repository layout
 
 - `mmf_0_90dtm.csv`, `mmf_0_30dtm.csv`, `mmf_0dtm.csv`, `mmf_0dtm_fed_funds.csv` — canonical latest series
@@ -17,11 +51,11 @@ canonical CSVs at the repo root; [MMF_SUMMARY.md](MMF_SUMMARY.md) explains *what
   = 100 @ the build-window start).
 - `mmf_30-90DTM_compare.png`, `mmf_0dtm_compare.png` — canonical latest 3-pane comparison charts.
 - `build_range.json` — `start_month` only (single source of truth for the start; there is no end setting).
-- `scripts/fetch_fred.py` — refreshes `data/` from FRED (all-or-nothing, validated; stdlib only).
+- `scripts/fetch_fred.py` — refreshes `data/` from FRED; writes only if every download has the right header and no fewer rows (stdlib only).
 - `scripts/build_mmf.py` — series builder (stdlib only); `FUNDS` table defines the buckets.
 - `scripts/plot_mmf.py` — chart renderer (matplotlib, from `.venv`).
 - `scripts/rebuild.sh` — fetch → build → plot in one go.
-- `data/` — raw FRED daily inputs `DTB3`, `DTB4WK`, `DFF`, `SOFR` (legacy `TB3MS` is unused and not refreshed).
+- `data/` — raw FRED daily inputs `DTB3`, `DTB4WK`, `DFF`, `SOFR` (the list lives in `SERIES` in `build_mmf.py`).
 - `output/` — timestamped build-history snapshots `YYYYMMDD_HHMM_*` (every build adds 6 files).
 - `README.md`, `MMF_SUMMARY.md`, `docs/mmf_methodology.md` — overview, consumer summary, methodology.
 - `.claude/settings.json` — committed Claude Code settings (`model: opus`, `effortLevel: xhigh`, permissions,
@@ -34,7 +68,7 @@ canonical CSVs at the repo root; [MMF_SUMMARY.md](MMF_SUMMARY.md) explains *what
 ## Build and run
 
 - `scripts/rebuild.sh` (or `/rebuild`) — fetch FRED → build series → render charts, through the last complete
-  calendar month before today. Stops at the first failing stage.
+  calendar month before today. Stops at the first failing step.
 - Stages individually: `python3 scripts/fetch_fred.py`, `python3 scripts/build_mmf.py`,
   `.venv/bin/python3 scripts/plot_mmf.py`.
 - The builder **fails, writing nothing**, if any input doesn't fully cover the end month (it needs an
@@ -57,10 +91,11 @@ canonical CSVs at the repo root; [MMF_SUMMARY.md](MMF_SUMMARY.md) explains *what
   (fed funds minus the mean overlap spread). Their month-to-month differences vs the parent series are
   model output, not observed data.
 - `fetch_fred.py` and `build_mmf.py` stay **pure stdlib**; matplotlib is only for `plot_mmf.py`.
+- `build_mmf.py` is the single source of truth for paths (`ROOT`, `DATA`, `OUTD`), the snapshot stamp
+  format (`STAMP`), and the input list (`SERIES`); `fetch_fred.py` and `plot_mmf.py` import them.
 - Doc statistics (MMF_SUMMARY table, methodology figures) are labelled **"as of the <Mon-YYYY> build"** and
   are refreshed by hand, not by `/rebuild`. When refreshing one, first reproduce the old value from the
   previous build's CSVs to confirm the method, then recompute.
-- Optional external TR override: `data/lseg_<key>_tr.csv` (`yyyymm,value`) replaces that fund's `tr_idx`.
 
 ## Conventions
 

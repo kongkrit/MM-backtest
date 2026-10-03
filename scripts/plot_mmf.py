@@ -1,26 +1,10 @@
 #!/usr/bin/env python3
 """
-Render the comparison charts (one per entry in CHARTS), each a 3-pane figure on
-a shared time axis:
-
-    pane 1   price_idx, SEMILOG y            (both funds)
-    pane 2   coupon_rate_annual, LINEAR y    (both funds)
-    pane 3   monthly coupon delta, LINEAR y  = coupon_monthly(A) - coupon_monthly(B),
-             in bp of NAV; blue where A pays more, red where B pays more.
-
-Charts produced:
-    mmf_30-90DTM_compare.png   0-90 vs 0-30 DTM T-bill funds
-    mmf_0dtm_compare.png       fed-funds vs SOFR overnight-cash funds (price pane
-                               is flat 100 — cash has zero duration)
-
-Reads the canonical CSVs at the repo root; for each chart writes:
-    <repo-root>/<name>.png                  canonical latest
-    output/<YYYYMMDD_HHMM>_<name>.png        timestamped build-history snapshot
-                                            (stamp captured right before writing)
-
-Needs matplotlib (see .venv):  .venv/bin/python3 scripts/plot_mmf.py
-Fund colours are dataviz categorical slots 1 (blue) & 2 (aqua); the delta uses
-the diverging blue<->red pair about a gray zero — all colourblind-safe.
+Render the comparison charts in CHARTS from the canonical CSVs at the repo root.
+Each is 3 panes on a shared time axis: price_idx (log y), annual coupon rate,
+and the monthly coupon difference A - B in bp of NAV (blue where A pays more,
+red where B does).  Writes <name>.png at the repo root plus a timestamped copy
+in output/.  Needs matplotlib:  .venv/bin/python3 scripts/plot_mmf.py
 """
 
 import csv
@@ -32,14 +16,13 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.dates import YearLocator, DateFormatter
-from matplotlib.ticker import ScalarFormatter, NullFormatter
+from matplotlib.ticker import ScalarFormatter
 from matplotlib.patches import Patch
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.join(HERE, "..")
-OUTD = os.path.join(HERE, "..", "output")
+from build_mmf import ROOT, OUTD, STAMP
 
-# dataviz reference palette (light surface) ---------------------------------
+# dataviz reference palette (light surface); the fund pair and the blue/red
+# delta pair are colourblind-safe.  -----------------------------------------
 SURFACE = "#fcfcfb"; INK = "#0b0b0b"; INK2 = "#52514e"
 MUTED = "#898781"; GRID = "#e1e0d9"; AXIS = "#c3c2b7"
 CA = "#2a78d6"    # blue  — slot 1  -> fund A
@@ -77,7 +60,8 @@ CHARTS = [
 
 
 def load(key):
-    rows = list(csv.DictReader(open(os.path.join(ROOT, f"mmf_{key}.csv"))))
+    with open(os.path.join(ROOT, f"mmf_{key}.csv"), newline="") as fh:
+        rows = list(csv.DictReader(fh))
     x = [datetime(int(r["yyyymm"]) // 100, int(r["yyyymm"]) % 100, 1) for r in rows]
     price = [float(r["price_idx"]) for r in rows]
     coupon_a = [float(r["coupon_rate_annual"]) * 100.0 for r in rows]   # percent
@@ -119,11 +103,8 @@ def build_fig(cfg):
     ax1.set_ylim(ylo, yhi)
     ax1.set_yticks(price_yticks)
     ax1.yaxis.set_major_formatter(ScalarFormatter())
-    ax1.yaxis.set_minor_formatter(NullFormatter())
     ax1.minorticks_off()
     ax1.set_ylabel(f"Price / NAV index\n(=100 @ {x[0].year}, log scale)")
-    ax1.set_title(cfg["titles"][0], loc="left", color=INK, fontsize=12.5,
-                  fontweight="bold", pad=8)
     ax1.legend(frameon=False, loc="upper left", labelcolor=INK2)
     ax1.text(split, note_y, "  " + cfg["split_note"], color=MUTED,
              fontsize=8.5, va="bottom", ha="left")
@@ -133,8 +114,6 @@ def build_fig(cfg):
     ax2.plot(x, caB, color=CB, lw=1.8, label=lB)
     ax2.set_ylim(0, None)
     ax2.set_ylabel("Coupon rate, annual (%)")
-    ax2.set_title(cfg["titles"][1], loc="left", color=INK, fontsize=12.5,
-                  fontweight="bold", pad=8)
     ax2.legend(frameon=False, loc="upper right", labelcolor=INK2)
 
     # pane 3: monthly coupon delta (A - B), diverging
@@ -146,16 +125,15 @@ def build_fig(cfg):
     ax3.plot(x, delta_bp, color=INK2, lw=0.7)
     ax3.set_ylabel(cfg["delta_ylabel"])
     ax3.set_xlabel("Year")
-    ax3.set_title(cfg["titles"][2], loc="left", color=INK, fontsize=12.5,
-                  fontweight="bold", pad=8)
     ax3.legend(handles=[Patch(color=CA, alpha=0.55, label=cfg["delta_more"][0]),
                         Patch(color=CRED, alpha=0.55, label=cfg["delta_more"][1])],
                frameon=False, loc="upper right", labelcolor=INK2, ncol=2, fontsize=8.5)
 
-    # shared x + proxy marker on every pane
+    # shared x, titles, and the proxy marker on every pane
     ax3.xaxis.set_major_locator(YearLocator(5))
     ax3.xaxis.set_major_formatter(DateFormatter("%Y"))
-    for ax in (ax1, ax2, ax3):
+    for ax, title in zip((ax1, ax2, ax3), cfg["titles"]):
+        ax.set_title(title, loc="left", color=INK, fontsize=12.5, fontweight="bold", pad=8)
         ax.axvline(split, color=MUTED, ls=(0, (4, 3)), lw=0.9, alpha=0.7)
         ax.grid(True, color=GRID, lw=0.6)
         ax.set_axisbelow(True)
@@ -177,7 +155,7 @@ if __name__ == "__main__":
         "font.family": "sans-serif", "font.size": 10,
     })
     figs = [(cfg, build_fig(cfg)) for cfg in CHARTS]
-    stamp = datetime.now().strftime("%Y%m%d_%H%M")   # fetched right before writing
+    stamp = datetime.now().strftime(STAMP)
     for cfg, fig in figs:
         for path in (os.path.join(ROOT, f"{cfg['name']}.png"),
                      os.path.join(OUTD, f"{stamp}_{cfg['name']}.png")):

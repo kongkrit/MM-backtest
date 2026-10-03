@@ -1,77 +1,24 @@
 #!/usr/bin/env python3
 """
-Build synthetic monthly series for 0% TER money-market funds that hold
-0-N DTM (days-to-maturity) U.S. Treasury bills.  The build window is inclusive
-YYYYMM: the start is repo-root build_range.json's start_month (the single source
-of truth); the end is the last complete calendar month before the build date
-(run 2026-10-03 -> 202609).  There are no hardcoded start/end dates in this
-script.  If any input does not yet fully cover that end month, the build fails
-before writing anything (refresh with scripts/fetch_fred.py).
+Build synthetic monthly series for 0% TER money-market funds (FUNDS below) from
+the daily FRED rates in data/.  Full model, inputs and proxies:
+docs/mmf_methodology.md.
 
-Emits, for each fund in the FUNDS table below, TWO copies:
-    <repo-root>/mmf_<key>.csv                 canonical latest series (consumers read this)
-    output/<YYYYMMDD_HHMM>_mmf_<key>.csv       timestamped build-history snapshot
-                                              (stamp captured right before writing)
-so the repo root always holds the current series while output/ accumulates the
-timestamped history of past builds.  Funds:
-    mmf_0_90dtm  0-90 DTM  (buys 13-week bills, avg life ~45d)
-    mmf_0_30dtm  0-30 DTM  (buys  4-week bills, avg life ~15d)
-    mmf_0dtm            CANONICAL cash: secured Treasury repo, SOFR (2018+; proxied
-                        before; flat NAV) — what a government MMF earns / you can hold
-    mmf_0dtm_fed_funds  effective fed funds (unsecured, interbank) — BENCHMARK only
+Window: start_month in build_range.json through the last complete calendar
+month before today.  Exits, writing nothing, if any input doesn't fully cover
+that month yet.
 
-Columns (identical schema for every fund):
-    yyyymm, price_idx, coupon_rate_monthly, coupon_rate_annual, tr_idx
+Model in brief: a "0-N DTM" fund (DTM = days to maturity) holds a ladder of
+bills bought over the last ~N days.  It therefore earns the trailing average of
+the N-day yield, and its NAV moves against month-end yield changes in proportion
+to the ladder's average remaining life, N/2 days.  Two share classes of one book:
+    price_idx  distributing (coupons paid out), 100 at the window start
+    tr_idx     accumulating (coupons reinvested), 100 at the window start
 
-==========================================================================
-PORTFOLIO MODEL
-==========================================================================
-A "0-N DTM" fund buys the bill of tenor ~N days at auction and holds it to
-maturity, so the steady-state book is a ladder with remaining lives spread
-uniformly over 0-N days:
-    * average remaining life = N/2 days           -> mark-to-market duration
-    * bills were purchased over the trailing ~N days, each locked at the
-      N-day yield prevailing then
-      -> income earned = trailing average of the N-day yield (lags the market)
-
-Two share classes off the SAME book, linked by the exact identity
-      tr_return[t] = price_return[t] + coupon_rate_monthly[t] :
-    price_idx  distributing NAV (coupons removed, marks to market), 100 @ START_YM
-    tr_idx     accumulating    (coupons reinvested), also 100 @ START_YM
-both indices are based at the build-window start (build_range.json) — no magic
-anchor date.
-
-==========================================================================
-INPUTS  (public FRED daily discount rates, %, converted to bond-equivalent)
-==========================================================================
-  data/DTB3.csv     3-month (13-week) bill, 1954->        -> 0-90 fund, all history
-  data/DTB4WK.csv   4-week bill, 2001-07-31->             -> 0-30 fund, 2001-08+
-  data/SOFR.csv     secured overnight financing rate (repo), 2018-04-> -> 0dtm
-                    (CANONICAL cash; pre-2018 proxied as fed funds - mean spread, ~0 bp)
-  data/DFF.csv      effective fed funds (overnight), 1954-> -> 0dtm_fed_funds (benchmark;
-                    add-on rate; also the pre-2018 proxy base for 0dtm/SOFR)
-
-PRE-2001 PROXY (0-30 fund only)
--------------------------------
-The Treasury did not auction 4-week bills before Jul-2001, so no 1-month
-series exists from the build start (build_range.json) through 2001-06, and
-Jul-2001 has a single quote (2001-07-31, below MIN_OBS).  Through 2001-07
-the 4-week DISCOUNT rate is proxied as
-    d_4wk(t) = d_3mo(t) - mean(d_3mo - d_4wk over the 2001-08+ overlap)
-(the month-average and month-end spreads are measured and applied separately).
-
-Consequence, documented in docs/mmf_methodology.md: pre-2001 the 0-30 fund is
-the SAME 3-month rate signal run through genuine 0-30 conventions (shorter
-1-month income-smoothing window + 28-day yield conversion).  It is therefore
-meaningfully lower-yielding and more responsive than the 0-90 fund
-(cumulatively a few % of carry over the proxied pre-2001 span) but carries
-little information
-INDEPENDENT of it: the real 1M-3M spread volatility (+/-35..93 bp post-2001)
-is flattened to a constant.  Treat pre-200108 0-30 vs 0-90 month-to-month
-divergences as structural-model output, not observed market data.
-
-Optional override (any fund): drop data/lseg_<key>_tr.csv (yyyymm,value) to
-replace that fund's tr_idx with a genuine external total-return index.
+Writes, per fund (columns: yyyymm, price_idx, coupon_rate_monthly,
+coupon_rate_annual, tr_idx):
+    mmf_<key>.csv                          canonical latest (repo root)
+    output/<YYYYMMDD_HHMM>_mmf_<key>.csv   timestamped build-history snapshot
 """
 
 import csv
@@ -79,178 +26,101 @@ import json
 import math
 import os
 import sys
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.join(HERE, "..")            # repo root: canonical latest series
-DATA = os.path.join(HERE, "..", "data")
-OUTD = os.path.join(HERE, "..", "output")  # build-history snapshots
+ROOT = os.path.dirname(HERE)                  # repo root: canonical latest outputs
+DATA = os.path.join(ROOT, "data")
+OUTD = os.path.join(ROOT, "output")           # timestamped build-history snapshots
+STAMP = "%Y%m%d_%H%M"                         # snapshot filename prefix
+SERIES = ("DTB3", "DTB4WK", "DFF", "SOFR")    # FRED inputs, read from data/<ID>.csv
+MIN_OBS = 10                                  # fewer daily quotes = partial month, dropped
 
 
-def load_build_range(today=None):
-    """Build window as inclusive YYYYMM ints (start_ym, end_ym).  start = repo-root
-    build_range.json start_month (single source of truth); end = the last complete
-    calendar month before `today` (default: the local date at run time)."""
+def load_build_range():
+    """Inclusive (start_ym, end_ym) as YYYYMM ints."""
     with open(os.path.join(ROOT, "build_range.json")) as fh:
         start = int(json.load(fh)["start_month"])
-    t = today or date.today()
-    end = t.year * 100 + t.month - 1 if t.month > 1 else (t.year - 1) * 100 + 12
-    return start, end
+    last_month = date.today().replace(day=1) - timedelta(days=1)   # 2026-10-03 -> 2026-09-30
+    return start, last_month.year * 100 + last_month.month
 
 
-START_YM, END_YM = load_build_range()   # the ONLY start/end dates — no magic literals
-MIN_OBS   = 10          # drop a partial month (data-quality gate, not a date)
-DAYS_360  = 360.0
-DAYS_365  = 365.0
+START_YM, END_YM = load_build_range()
 
-# key, tenor (days of the purchased bill), max DTM (bucket width)
+# tenor = days of the bill bought; max_dtm = longest remaining life held.  The
+# overnight funds use tenor 1, which reduces investment_yield() to the 365/360
+# day-count conversion, and max_dtm 0: zero duration, so the NAV stays at 100.
 FUNDS = [
     {"key": "0_90dtm", "tenor": 91, "max_dtm": 90},
     {"key": "0_30dtm", "tenor": 28, "max_dtm": 30},
-    # 0dtm = CANONICAL overnight "cash": secured Treasury repo (SOFR). This is
-    # what a government/Treasury money-market fund actually earns and what you can
-    # hold in a brokerage account. Real data 2018-04+; before that proxied as
-    # fed funds minus the mean fed-funds - SOFR spread (~0 bp). tenor 1 makes
-    # investment_yield() collapse to the x365/360 (actual/360->actual/365)
-    # conversion; max_dtm 0 => zero duration => flat NAV (=100).
-    {"key": "0dtm", "tenor": 1, "max_dtm": 0},
-    # 0dtm_fed_funds = effective fed funds (UNSECURED, interbank). BENCHMARK ONLY
-    # — not directly holdable at retail. Same flat-NAV cash mechanics.
-    {"key": "0dtm_fed_funds", "tenor": 1, "max_dtm": 0},
+    {"key": "0dtm", "tenor": 1, "max_dtm": 0},             # SOFR: canonical, holdable cash
+    {"key": "0dtm_fed_funds", "tenor": 1, "max_dtm": 0},   # fed funds: benchmark only
 ]
 
 
 def investment_yield(d, tenor):
-    """Discount rate (decimal) -> bond-equivalent yield (decimal) for a
-    `tenor`-day bill.  Uplift = 365/360 with the exact price-based convexity."""
-    return d * (DAYS_365 / DAYS_360) / (1.0 - d * tenor / DAYS_360)
+    """Discount rate -> bond-equivalent yield (both decimal) for a `tenor`-day bill.
+    Bills are quoted as a discount from face value per 360 days; the yield
+    actually earned is on the lower price paid, per 365 days.
+    E.g. a 5.00% discount on a 91-day bill -> 5.13% yield."""
+    return d * (365 / 360) / (1 - d * tenor / 360)
 
 
 def load_daily(path):
-    """Daily FRED discount CSV -> ({yyyymm: (avg_decimal, eom_decimal)}, last_date),
-    last_date = the latest non-missing observation (YYYY-MM-DD), partial months
-    included."""
-    agg = {}
+    """Daily FRED rate CSV (percent) -> {yyyymm: (month_avg, month_end)}, decimal.
+    Exits if END_YM isn't fully posted: FRED adds each day's rate about a
+    business day late, so END_YM counts as complete only once a later day is in."""
+    by_month = {}
     with open(path, newline="") as fh:
-        for rec in csv.DictReader(fh):
-            date = rec["observation_date"]
-            col = next(k for k in rec if k != "observation_date")
-            val = rec[col]
-            if val in (".", "", None):
-                continue
-            ym = int(date[:4]) * 100 + int(date[5:7])
-            v = float(val) / 100.0
-            a = agg.setdefault(ym, [0.0, 0, "", 0.0])
-            a[0] += v
-            a[1] += 1
-            if date > a[2]:
-                a[2], a[3] = date, v
-    monthly = {ym: (s / n, last) for ym, (s, n, _dt, last) in agg.items()
-               if n >= MIN_OBS}
-    return monthly, max(a[2] for a in agg.values())
+        for day, rate in list(csv.reader(fh))[1:]:
+            if rate:                                  # blank = no quote that day
+                ym = int(day[:4]) * 100 + int(day[5:7])
+                by_month.setdefault(ym, []).append(float(rate) / 100.0)
+    if max(by_month) <= END_YM or len(by_month.get(END_YM, [])) < MIN_OBS:
+        sys.exit(f"{os.path.basename(path)}: {END_YM} isn't fully posted yet; run "
+                 "scripts/fetch_fred.py or retry tomorrow. Nothing was written.")
+    return {ym: (sum(v) / len(v), v[-1]) for ym, v in by_month.items()
+            if len(v) >= MIN_OBS}
 
 
-def require_coverage(inputs):
-    """Fail loudly unless every input fully covers END_YM: the month has
-    >= MIN_OBS observations AND the series has an observation dated after it
-    (so END_YM's month-end value is final, not awaiting FRED's next posting).
-    `inputs` = {name: (monthly, last_date)}.  Runs before anything is written."""
-    short = []
-    for name, (monthly, last) in inputs.items():
-        if int(last[:4]) * 100 + int(last[5:7]) <= END_YM:
-            short.append(f"  {name}: last observation {last}")
-        elif END_YM not in monthly:
-            short.append(f"  {name}: {END_YM} has fewer than {MIN_OBS} observations")
-    if short:
-        sys.exit(f"build window ends {END_YM} (last complete month), but these inputs "
-                 f"don't fully cover it yet:\n" + "\n".join(short) +
-                 "\nrun scripts/fetch_fred.py (or wait for FRED to post), then rebuild. "
-                 "Nothing was written.")
+def proxy_fill(base, real, tenor):
+    """Fill the months `real` lacks with `base` minus their mean spread over the
+    months both have (month-average and month-end spreads separately).
+    Returns (filled series, note); note's RMSE compares proxy and real yields
+    over that overlap."""
+    overlap = sorted(set(base) & set(real))
+    s_avg = sum(base[m][0] - real[m][0] for m in overlap) / len(overlap)
+    s_eom = sum(base[m][1] - real[m][1] for m in overlap) / len(overlap)
+    filled = {m: real.get(m, (a - s_avg, e - s_eom)) for m, (a, e) in base.items()}
+    se = sum((investment_yield(base[m][0] - s_avg, tenor)
+              - investment_yield(real[m][0], tenor)) ** 2 for m in overlap)
+    note = {"first_real": overlap[0], "avg_bp": s_avg * 1e4, "eom_bp": s_eom * 1e4,
+            "rmse_bp": math.sqrt(se / len(overlap)) * 1e4,
+            "proxied": sum(START_YM <= m <= END_YM for m in set(base) - set(real))}
+    return filled, note
 
 
-def proxy_short_discount(d3, d1):
-    """Full-history 4-week discount {ym:(avg,eom)}: real DTB4WK where it exists,
-    else 3-month minus the mean overlap discount spread.  Returns (series, note)."""
-    ov = sorted(set(d3) & set(d1))
-    da = sum(d3[m][0] - d1[m][0] for m in ov) / len(ov)
-    de = sum(d3[m][1] - d1[m][1] for m in ov) / len(ov)
-    out, proxied = {}, 0
-    for m, (a3, e3) in d3.items():
-        if m in d1:
-            out[m] = d1[m]
-        else:
-            out[m] = (a3 - da, e3 - de)
-            proxied += 1
-    se = sum((investment_yield(d3[m][0] - da, 28)
-              - investment_yield(d1[m][0], 28)) ** 2 for m in ov)
-    note = {"spread_avg_bp": da * 1e4, "spread_eom_bp": de * 1e4,
-            "overlap": (ov[0], ov[-1]), "proxied": proxied,
-            "rmse_bp": math.sqrt(se / len(ov)) * 1e4}
-    return out, note
-
-
-def proxy_overnight(base, target):
-    """Full-history overnight add-on rate {ym:(avg,eom)}: real `target` (e.g.
-    SOFR, secured) where it exists, else `base` (fed funds) minus the mean
-    base-target overlap spread.  Same shape as proxy_short_discount; used for
-    the canonical secured-overnight (0dtm) series whose real data starts 2018-04."""
-    ov = sorted(set(base) & set(target))
-    da = sum(base[m][0] - target[m][0] for m in ov) / len(ov)
-    de = sum(base[m][1] - target[m][1] for m in ov) / len(ov)
-    out, proxied = {}, 0
-    for m, (a, e) in base.items():
-        if m in target:
-            out[m] = target[m]
-        else:
-            out[m] = (a - da, e - de)
-            proxied += 1
-    note = {"spread_avg_bp": da * 1e4, "overlap": (ov[0], ov[-1]), "proxied": proxied}
-    return out, note
-
-
-def load_override(key):
-    path = os.path.join(DATA, f"lseg_{key}_tr.csv")
-    if not os.path.exists(path):
-        return None
-    s = {}
-    for rec in csv.DictReader(open(path, newline="")):
-        cols = list(rec.values())
-        s[int(rec.get("yyyymm", cols[0]))] = float(rec.get("value", cols[1]))
-    return s or None
-
-
-def build_fund(disc, tenor, max_dtm, key):
-    months = sorted(m for m in disc if START_YM <= m <= END_YM)
-    y_avg = {m: investment_yield(disc[m][0], tenor) for m in months}
-    y_eom = {m: investment_yield(disc[m][1], tenor) for m in months}
-    d_mod = (max_dtm / 2.0) / DAYS_365                 # avg-life duration (yr)
-    ladder = max(1, round(max_dtm / 30.0))             # trailing purchase window
+def build_fund(rates, tenor, max_dtm):
+    """Monthly rows for one fund from its {yyyymm: (avg, eom)} discount rates."""
+    months = sorted(m for m in rates if START_YM <= m <= END_YM)
+    y_avg = [investment_yield(rates[m][0], tenor) for m in months]
+    y_eom = [investment_yield(rates[m][1], tenor) for m in months]
+    duration = (max_dtm / 2.0) / 365.0        # average remaining life, years
+    ladder = max(1, round(max_dtm / 30.0))    # months of purchases still held
 
     out = []
-    price_idx, tr_raw, prev_eom = 100.0, 1.0, None
+    price_idx, tr_raw = 100.0, 1.0
     for i, m in enumerate(months):
-        win = [y_avg[months[j]] for j in range(max(0, i - ladder + 1), i + 1)]
-        y_earn = sum(win) / len(win)
-        coupon_m = y_earn / 12.0
-        price_ret = 0.0 if prev_eom is None else -d_mod * (y_eom[m] - prev_eom)
+        held = y_avg[max(0, i - ladder + 1): i + 1]   # yields locked in by bills still held
+        coupon_a = sum(held) / len(held)
+        coupon_m = coupon_a / 12.0
+        price_ret = -duration * (y_eom[i] - y_eom[i - 1]) if i else 0.0
         price_idx *= (1.0 + price_ret)
         tr_raw *= (1.0 + coupon_m + price_ret)
-        out.append({"yyyymm": m, "price_idx": price_idx,
-                    "coupon_rate_monthly": coupon_m, "coupon_rate_annual": y_earn,
-                    "tr_raw": tr_raw})
-        prev_eom = y_eom[m]
-
-    base = out[0]["tr_raw"]        # tr_idx = 100 @ the build-window start (build_range.json)
-    for r in out:
-        r["tr_idx"] = r["tr_raw"] / base * 100.0
-
-    override = load_override(key)
-    if override:
-        ob = override[min(override)]   # rebase the external index to its own earliest month
-        for r in out:
-            if r["yyyymm"] in override:
-                r["tr_idx"] = override[r["yyyymm"]] / ob * 100.0
-        print(f"  [{key}] external TR override applied")
+        out.append({"yyyymm": m, "price_idx": price_idx, "coupon_rate_monthly": coupon_m,
+                    "coupon_rate_annual": coupon_a, "tr_raw": tr_raw})
+    for r in out:                                     # rebase: tr_idx = 100 at the window start
+        r["tr_idx"] = r["tr_raw"] / out[0]["tr_raw"] * 100.0
     return out
 
 
@@ -267,35 +137,23 @@ def write(out, path):
 
 
 if __name__ == "__main__":
-    d3, d3_last = load_daily(os.path.join(DATA, "DTB3.csv"))
-    d1_real, d1_last = load_daily(os.path.join(DATA, "DTB4WK.csv"))
-    dff, dff_last = load_daily(os.path.join(DATA, "DFF.csv"))      # overnight cash (fed funds)
-    sofr, sofr_last = load_daily(os.path.join(DATA, "SOFR.csv"))   # secured overnight repo
-    require_coverage({"DTB3": (d3, d3_last), "DTB4WK": (d1_real, d1_last),
-                      "DFF": (dff, dff_last), "SOFR": (sofr, sofr_last)})
-    d1_full, note = proxy_short_discount(d3, d1_real)
-    sofr_full, snote = proxy_overnight(dff, sofr)
-    disc_by_key = {"0_90dtm": d3, "0_30dtm": d1_full,
-                   "0dtm": sofr_full, "0dtm_fed_funds": dff}
+    d3, d1_real, dff, sofr_real = (load_daily(os.path.join(DATA, f"{s}.csv")) for s in SERIES)
+    d1, note_1m = proxy_fill(d3, d1_real, 28)        # 4-week bill from the 3-month bill
+    sofr, note_sofr = proxy_fill(dff, sofr_real, 1)  # SOFR from fed funds
+    for name, n in (("4-week bill", note_1m), ("SOFR", note_sofr)):
+        print(f"{name} proxy: real from {n['first_real']}, {n['proxied']} window months proxied; "
+              f"spread avg {n['avg_bp']:.1f}bp eom {n['eom_bp']:.1f}bp, RMSE {n['rmse_bp']:.1f}bp")
 
-    print(f"4-week proxy: spread avg={note['spread_avg_bp']:.1f}bp "
-          f"eom={note['spread_eom_bp']:.1f}bp; real {note['overlap'][0]}-"
-          f"{note['overlap'][1]}, {note['proxied']} months proxied pre-2001 "
-          f"(overlap RMSE {note['rmse_bp']:.1f}bp)")
-    print(f"SOFR proxy: fed funds - SOFR spread {snote['spread_avg_bp']:.1f}bp; "
-          f"real {snote['overlap'][0]}-{snote['overlap'][1]}, "
-          f"{snote['proxied']} months proxied pre-2018")
-    results = [(f, build_fund(disc_by_key[f["key"]], f["tenor"], f["max_dtm"], f["key"]))
-               for f in FUNDS]
-    stamp = datetime.now().strftime("%Y%m%d_%H%M")   # fetched right before writing
-    for f, out in results:
-        write(out, os.path.join(ROOT, f"mmf_{f['key']}.csv"))          # canonical latest
-        write(out, os.path.join(OUTD, f"{stamp}_mmf_{f['key']}.csv"))  # timestamped history
+    rates = {"0_90dtm": d3, "0_30dtm": d1, "0dtm": sofr, "0dtm_fed_funds": dff}
+    stamp = datetime.now().strftime(STAMP)
+    for f in FUNDS:
+        out = build_fund(rates[f["key"]], f["tenor"], f["max_dtm"])
+        write(out, os.path.join(ROOT, f"mmf_{f['key']}.csv"))
+        write(out, os.path.join(OUTD, f"{stamp}_mmf_{f['key']}.csv"))
         a, z = out[0], out[-1]
-        yrs = len(out) / 12.0
         print(f"mmf_{f['key']}: {len(out)} rows {a['yyyymm']}-{z['yyyymm']}  "
               f"tr {a['tr_idx']:.2f}->{z['tr_idx']:.2f}  "
-              f"CAGR {(z['tr_idx']/a['tr_idx'])**(1/yrs)*100-100:.3f}%  "
+              f"CAGR {(z['tr_idx'] / a['tr_idx']) ** (12 / len(out)) * 100 - 100:.3f}%  "
               f"price[{min(r['price_idx'] for r in out):.2f},"
               f"{max(r['price_idx'] for r in out):.2f}]")
     print(f"build stamp: {stamp}")
