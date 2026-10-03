@@ -1,9 +1,10 @@
 # MMF series — consumer summary
 
 Synthetic **0% TER** (no fee drag) money-market fund series: two rolling **T-bill**
-ladders and two **overnight-cash** funds. Monthly, **Jan 1970 → May 2026** (677
-rows each). The build window is the single source of truth in `build_range.json`
-at the repo root (`start_month` / `end_month`, inclusive `YYYYMM`).
+ladders and two **overnight-cash** funds. Monthly, from **Jan 1970** (`start_month`
+in `build_range.json` at the repo root, the single source of truth) through the
+**last complete calendar month before the build date**; every fund has the same
+row count.
 
 ## Files
 
@@ -46,12 +47,14 @@ only for the price mark.)
 
 ## At a glance
 
+*As of the Sep-2026 build (197001 → 202609, 681 rows).*
+
 | Fund | tr_idx 1970 → 2026 | TR CAGR | price_idx |
 |---|---|---|---|
-| 0–90 DTM (bills) | 100.00 → 1316.39 | 4.67% | 98.98 – 101.00 |
-| 0–30 DTM (bills) | 100.00 → 1226.84 | 4.54% | 99.67 – 100.33 |
-| **0DTM cash — SOFR** (`mmf_0dtm`) | 100.00 → 1610.30 | **5.05%** | flat 100 |
-| 0DTM fed funds (benchmark) | 100.00 → 1612.81 | 5.05% | flat 100 |
+| 0–90 DTM (bills) | 100.00 → 1332.35 | 4.67% | 98.98 – 101.00 |
+| 0–30 DTM (bills) | 100.00 → 1241.84 | 4.54% | 99.67 – 100.33 |
+| **0DTM cash — SOFR** (`mmf_0dtm`) | 100.00 → 1630.43 | **5.04%** | flat 100 |
+| 0DTM fed funds (benchmark) | 100.00 → 1632.84 | 5.04% | flat 100 |
 
 Among the **bills**, shorter = a bit less yield and a steadier NAV. The
 **overnight-cash** funds yield *more* than the bills (see the note below) — the
@@ -69,18 +72,19 @@ Two comparison charts (repo root), each three shared-axis panes — price index
 and `..._*_compare.png`), stamped when the build ran. For current data, always read
 the files at the repo root.
 
-## ⚠️ Caution 1 — the 0–30 DTM series before July 2001
+## ⚠️ Caution 1 — the 0–30 DTM series through July 2001
 
 4-week Treasury bills did not exist before the Treasury began auctioning them in
-**July 2001**. For **1970 → June 2001** the 0–30 series is **modeled from 3-month
-bill data**, not observed 1-month bills.
+**July 2001**. For **1970 → July 2001** the 0–30 series is **modeled from 3-month
+bill data**, not observed 1-month bills (July 2001 itself has a single 4-week quote,
+on the 31st — too few days for a monthly average).
 
-- **From 2001-07 onward:** fully real — use freely, including the 0–30 vs 0–90 difference.
-- **Before 2001-07:** the 0–30 fund is the 0–90 rate signal re-expressed with
+- **From 2001-08 onward:** fully real — use freely, including the 0–30 vs 0–90 difference.
+- **Through 2001-07:** the 0–30 fund is the 0–90 rate signal re-expressed with
   shorter-maturity behavior. Its **level and long-run return are reliable**, but its
   **month-to-month difference from 0–90 is a modeling artifact** (the true
   1M-vs-3M spread is assumed constant). Don't build 0–30-vs-0–90 spread/relative-value
-  signals on that window; use 0–90 alone there, or start at 2001-07.
+  signals on that window; use 0–90 alone there, or start at 2001-08.
 
 The 0–90 fund has **no such caveat** — real 3-month bill data across the full 1970+ history.
 

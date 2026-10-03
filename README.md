@@ -1,10 +1,11 @@
 # MM-backtest
 
 Synthetic monthly **total-return and price series for 0% TER money-market funds**
-holding short-dated U.S. Treasuries / cash. The build window is set in
-[`build_range.json`](build_range.json) (`start_month` / `end_month`, inclusive
-`YYYYMM`) — currently **Jan 1970 → May 2026** (677 months). Built from public
-Federal Reserve (FRED) daily rates — no paid data feed required.
+holding short-dated U.S. Treasuries / cash. The build window starts at
+`start_month` in [`build_range.json`](build_range.json) (**Jan 1970**) and ends at
+the **last complete calendar month before the build date** (a build run on
+2026-10-03 ends at Sep 2026). Built from public Federal Reserve (FRED) daily
+rates — no paid data feed required.
 
 ## The series
 
@@ -30,9 +31,9 @@ Columns: `yyyymm`, `price_idx` (distributing NAV, =100 @ the build-window start)
 are two share classes of the same portfolio (`tr_return = price_return + coupon`).
 
 > [!WARNING]
-> The **0–30 fund before July 2001 is proxied** — 4-week bills didn't exist then.
+> The **0–30 fund through July 2001 is proxied** — 4-week bills didn't exist then.
 > Its level and long-run return are reliable, but its month-to-month difference
-> from the 0–90 fund pre-2001-07 is a modeling artifact, not observed data. Don't
+> from the 0–90 fund through 2001-07 is a modeling artifact, not observed data. Don't
 > build 0–30-vs-0–90 spread/relative-value signals on that window. See
 > [`MMF_SUMMARY.md`](MMF_SUMMARY.md).
 
@@ -50,7 +51,7 @@ shared time axis:
 ![fed funds vs SOFR — flat NAV, coupon rate, fed funds − SOFR delta](mmf_0dtm_compare.png)
 
 Bill panes: the 0–90 NAV swings ~3× wider (more duration); coupons near-identical
-(flat front curve); dashed line = Jul-2001 (0–30 proxied before). Cash panes: NAV
+(flat front curve); dashed line = Aug-2001 (0–30 proxied through Jul-2001). Cash panes: NAV
 flat at 100 (zero duration); the delta surfaces the Sept-2019 repo spike; dashed
 line = Apr-2018 (SOFR proxied before).
 
@@ -61,20 +62,38 @@ line = Apr-2018 (SOFR proxied before).
 
 ## Regenerate
 
+One command refreshes everything through the last complete month before today:
+
 ```bash
-# refetch FRED inputs (optional — already in data/)
-for id in DTB3 DTB4WK DFF SOFR; do
-  curl -sSL "https://fred.stlouisfed.org/graph/fredgraph.csv?id=$id" -o data/$id.csv
-done
+scripts/rebuild.sh                      # fetch → build → plot; or /rebuild in Claude Code
+```
+
+It runs the three stages below in order and stops at the first one that fails (e.g.
+FRED hasn't yet posted the end month), so a failed stage never feeds the next. The
+`/rebuild` slash command ([`.claude/commands/rebuild.md`](.claude/commands/rebuild.md))
+runs the same script and summarizes what changed; it doesn't edit docs or commit.
+The stages individually:
+
+```bash
+python3 scripts/fetch_fred.py           # refresh FRED inputs in data/ (pure Python, no deps)
 python3 scripts/build_mmf.py            # series CSVs (pure Python, no deps)
 .venv/bin/python3 scripts/plot_mmf.py   # comparison charts (needs matplotlib)
 ```
 
+The fetcher downloads the full history of `DTB3`, `DTB4WK`, `DFF` and `SOFR`,
+validates each download (header, dates, no truncated or shrinking history), and
+only then replaces all four files in `data/` — on any failure `data/` is left
+untouched. It reports each series' new last date, rows added, and any revised
+past values.
+
 The series builder writes the canonical CSVs to the repo root plus a
 **timestamped** snapshot `output/<YYYYMMDD_HHMM>_mmf_<fund>.csv` (the stamp is
 taken at write time). `plot_mmf.py` likewise writes the two `*_compare.png`
-charts at the root and timestamped copies in `output/`. Change the start/end months
-by editing [`build_range.json`](build_range.json) and rerunning the builder. Add a
+charts at the root and timestamped copies in `output/`. Change the start month
+by editing [`build_range.json`](build_range.json) and rerunning the builder; the
+end month is always the last complete month before today. If any FRED input doesn't
+yet fully cover that month (not refetched, or FRED hasn't posted the month-end yet),
+the builder exits with an error and writes nothing. Add a
 maturity bucket by appending `{key, tenor, max_dtm}` to the `FUNDS` table in
 [`scripts/build_mmf.py`](scripts/build_mmf.py).
 
@@ -90,7 +109,9 @@ python3 -m venv .venv && .venv/bin/python3 -m pip install matplotlib
 |---|---|
 | `mmf_0_90dtm.csv`, `mmf_0_30dtm.csv`, `mmf_0dtm.csv`, `mmf_0dtm_fed_funds.csv` | Canonical latest series (repo root). |
 | `mmf_30-90DTM_compare.png`, `mmf_0dtm_compare.png` | Canonical latest 3-pane comparison charts (repo root). |
-| `build_range.json` | Single source of truth for the build window (`start_month` / `end_month`). |
+| `build_range.json` | Single source of truth for the build-window start (`start_month`); the end is the last complete month before the build date. |
+| `scripts/rebuild.sh`, `.claude/commands/rebuild.md` | One-shot fetch → build → plot (`/rebuild` in Claude Code). |
+| `scripts/fetch_fred.py` | Refreshes the FRED inputs in `data/` (all-or-nothing, validated). |
 | `scripts/build_mmf.py`, `scripts/plot_mmf.py` | Series builder and chart renderer. |
 | `data/` | Raw FRED inputs (`DTB3`, `DTB4WK`, `DFF`, `SOFR`). |
 | `output/` | Timestamped build-history snapshots (`YYYYMMDD_HHMM_mmf_*`). |
@@ -120,7 +141,7 @@ sudo apt install -y git gh python3 python3-venv python3-pip python3-dev build-es
 | `python3-pip` | Installs Python dependencies (most ship as prebuilt wheels). |
 | `python3-dev` | C headers for dependencies built from source. |
 | `build-essential` | C/C++ compiler + make, for the same source builds. |
-| `curl` | Fetching FRED data over HTTP. |
+| `curl` | Ad-hoc HTTP fetches (`scripts/fetch_fred.py` itself uses Python's stdlib). |
 | `jq` | Command-line JSON processor. |
 
 ### Installing more tools

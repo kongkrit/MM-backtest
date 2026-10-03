@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 """
 Build synthetic monthly series for 0% TER money-market funds that hold
-0-N DTM (days-to-maturity) U.S. Treasury bills.  The build window (inclusive
-start/end YYYYMM) is read from repo-root build_range.json — the single source
-of truth; there are no hardcoded start/end dates in this script.
+0-N DTM (days-to-maturity) U.S. Treasury bills.  The build window is inclusive
+YYYYMM: the start is repo-root build_range.json's start_month (the single source
+of truth); the end is the last complete calendar month before the build date
+(run 2026-10-03 -> 202609).  There are no hardcoded start/end dates in this
+script.  If any input does not yet fully cover that end month, the build fails
+before writing anything (refresh with scripts/fetch_fred.py).
 
 Emits, for each fund in the FUNDS table below, TWO copies:
     <repo-root>/mmf_<key>.csv                 canonical latest series (consumers read this)
@@ -42,7 +45,7 @@ anchor date.
 INPUTS  (public FRED daily discount rates, %, converted to bond-equivalent)
 ==========================================================================
   data/DTB3.csv     3-month (13-week) bill, 1954->        -> 0-90 fund, all history
-  data/DTB4WK.csv   4-week bill, 2001-07->                -> 0-30 fund, 2001-07+
+  data/DTB4WK.csv   4-week bill, 2001-07-31->             -> 0-30 fund, 2001-08+
   data/SOFR.csv     secured overnight financing rate (repo), 2018-04-> -> 0dtm
                     (CANONICAL cash; pre-2018 proxied as fed funds - mean spread, ~0 bp)
   data/DFF.csv      effective fed funds (overnight), 1954-> -> 0dtm_fed_funds (benchmark;
@@ -51,9 +54,10 @@ INPUTS  (public FRED daily discount rates, %, converted to bond-equivalent)
 PRE-2001 PROXY (0-30 fund only)
 -------------------------------
 The Treasury did not auction 4-week bills before Jul-2001, so no 1-month
-series exists from the build start (build_range.json) through 2001-06.  There
+series exists from the build start (build_range.json) through 2001-06, and
+Jul-2001 has a single quote (2001-07-31, below MIN_OBS).  Through 2001-07
 the 4-week DISCOUNT rate is proxied as
-    d_4wk(t) = d_3mo(t) - mean(d_3mo - d_4wk over the 2001-07+ overlap)
+    d_4wk(t) = d_3mo(t) - mean(d_3mo - d_4wk over the 2001-08+ overlap)
 (the month-average and month-end spreads are measured and applied separately).
 
 Consequence, documented in docs/mmf_methodology.md: pre-2001 the 0-30 fund is
@@ -63,7 +67,7 @@ meaningfully lower-yielding and more responsive than the 0-90 fund
 (cumulatively a few % of carry over the proxied pre-2001 span) but carries
 little information
 INDEPENDENT of it: the real 1M-3M spread volatility (+/-35..93 bp post-2001)
-is flattened to a constant.  Treat pre-200107 0-30 vs 0-90 month-to-month
+is flattened to a constant.  Treat pre-200108 0-30 vs 0-90 month-to-month
 divergences as structural-model output, not observed market data.
 
 Optional override (any fund): drop data/lseg_<key>_tr.csv (yyyymm,value) to
@@ -74,7 +78,8 @@ import csv
 import json
 import math
 import os
-from datetime import datetime
+import sys
+from datetime import date, datetime
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.join(HERE, "..")            # repo root: canonical latest series
@@ -82,12 +87,15 @@ DATA = os.path.join(HERE, "..", "data")
 OUTD = os.path.join(HERE, "..", "output")  # build-history snapshots
 
 
-def load_build_range():
-    """Single source of truth for the build window (repo-root build_range.json).
-    Returns (start_ym, end_ym) as inclusive YYYYMM ints."""
+def load_build_range(today=None):
+    """Build window as inclusive YYYYMM ints (start_ym, end_ym).  start = repo-root
+    build_range.json start_month (single source of truth); end = the last complete
+    calendar month before `today` (default: the local date at run time)."""
     with open(os.path.join(ROOT, "build_range.json")) as fh:
-        r = json.load(fh)
-    return int(r["start_month"]), int(r["end_month"])
+        start = int(json.load(fh)["start_month"])
+    t = today or date.today()
+    end = t.year * 100 + t.month - 1 if t.month > 1 else (t.year - 1) * 100 + 12
+    return start, end
 
 
 START_YM, END_YM = load_build_range()   # the ONLY start/end dates — no magic literals
@@ -119,7 +127,9 @@ def investment_yield(d, tenor):
 
 
 def load_daily(path):
-    """Daily FRED discount CSV -> {yyyymm: (avg_decimal, eom_decimal)}."""
+    """Daily FRED discount CSV -> ({yyyymm: (avg_decimal, eom_decimal)}, last_date),
+    last_date = the latest non-missing observation (YYYY-MM-DD), partial months
+    included."""
     agg = {}
     with open(path, newline="") as fh:
         for rec in csv.DictReader(fh):
@@ -135,8 +145,27 @@ def load_daily(path):
             a[1] += 1
             if date > a[2]:
                 a[2], a[3] = date, v
-    return {ym: (s / n, last) for ym, (s, n, _dt, last) in agg.items()
-            if n >= MIN_OBS}
+    monthly = {ym: (s / n, last) for ym, (s, n, _dt, last) in agg.items()
+               if n >= MIN_OBS}
+    return monthly, max(a[2] for a in agg.values())
+
+
+def require_coverage(inputs):
+    """Fail loudly unless every input fully covers END_YM: the month has
+    >= MIN_OBS observations AND the series has an observation dated after it
+    (so END_YM's month-end value is final, not awaiting FRED's next posting).
+    `inputs` = {name: (monthly, last_date)}.  Runs before anything is written."""
+    short = []
+    for name, (monthly, last) in inputs.items():
+        if int(last[:4]) * 100 + int(last[5:7]) <= END_YM:
+            short.append(f"  {name}: last observation {last}")
+        elif END_YM not in monthly:
+            short.append(f"  {name}: {END_YM} has fewer than {MIN_OBS} observations")
+    if short:
+        sys.exit(f"build window ends {END_YM} (last complete month), but these inputs "
+                 f"don't fully cover it yet:\n" + "\n".join(short) +
+                 "\nrun scripts/fetch_fred.py (or wait for FRED to post), then rebuild. "
+                 "Nothing was written.")
 
 
 def proxy_short_discount(d3, d1):
@@ -238,11 +267,13 @@ def write(out, path):
 
 
 if __name__ == "__main__":
-    d3 = load_daily(os.path.join(DATA, "DTB3.csv"))
-    d1_real = load_daily(os.path.join(DATA, "DTB4WK.csv"))
+    d3, d3_last = load_daily(os.path.join(DATA, "DTB3.csv"))
+    d1_real, d1_last = load_daily(os.path.join(DATA, "DTB4WK.csv"))
+    dff, dff_last = load_daily(os.path.join(DATA, "DFF.csv"))      # overnight cash (fed funds)
+    sofr, sofr_last = load_daily(os.path.join(DATA, "SOFR.csv"))   # secured overnight repo
+    require_coverage({"DTB3": (d3, d3_last), "DTB4WK": (d1_real, d1_last),
+                      "DFF": (dff, dff_last), "SOFR": (sofr, sofr_last)})
     d1_full, note = proxy_short_discount(d3, d1_real)
-    dff = load_daily(os.path.join(DATA, "DFF.csv"))   # overnight cash (fed funds)
-    sofr = load_daily(os.path.join(DATA, "SOFR.csv"))  # secured overnight repo
     sofr_full, snote = proxy_overnight(dff, sofr)
     disc_by_key = {"0_90dtm": d3, "0_30dtm": d1_full,
                    "0dtm": sofr_full, "0dtm_fed_funds": dff}

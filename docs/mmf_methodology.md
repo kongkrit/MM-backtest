@@ -1,9 +1,12 @@
 # Money-market fund series — methodology
 
 Synthetic monthly total-return and price series for **0% TER** money-market
-funds holding short-dated U.S. Treasuries / cash, over the window set in
-[`build_range.json`](../build_range.json) (`start_month` / `end_month`, inclusive
-`YYYYMM`) — currently **January 1970 → May 2026** (677 months). Built by
+funds holding short-dated U.S. Treasuries / cash, from `start_month` in
+[`build_range.json`](../build_range.json) (**January 1970**) through the **last
+complete calendar month before the build date** (inclusive `YYYYMM`; a build run
+on 2026-10-03 ends at 202609). The builder fails, writing nothing, if any input
+doesn't yet fully cover that end month. Figures quoted below are **as of the
+Sep-2026 build** (197001 → 202609, 681 months). Built by
 [`scripts/build_mmf.py`](../scripts/build_mmf.py).
 
 ## Funds
@@ -87,12 +90,14 @@ bill rates, essentially never revised.
 ## ⚠️ Pre-2001 proxy — READ THIS for the 0–30 fund
 
 The Treasury did not auction 4-week bills before **July 2001**, so no 1-month
-series exists for **1970 → 2001-06** (378 of the 677 emitted months). There the 4-week
+series exists for **1970 → 2001-06**, and July 2001 has a single daily quote
+(2001-07-31) — below the 10-observation monthly minimum. The proxy therefore covers
+**1970-01 → 2001-07** (379 of the 681 emitted months). There the 4-week
 *discount* rate is proxied as the 3-month discount minus the mean overlap
 spread (month-average and month-end handled separately):
 
 - mean 3M−4W discount spread: **avg 5.6 bp, eom 5.3 bp**
-- proxy accuracy vs the real 4-week bill over the 2001-07+ overlap: **13.3 bp RMSE**
+- proxy accuracy vs the real 4-week bill over the 2001-08+ overlap: **13.2 bp RMSE**
 
 **What this means.** Pre-2001 the 0–30 fund is the *same 3-month rate signal*
 run through genuine 0–30 conventions (shorter 1-month income window + 28-day
@@ -102,28 +107,27 @@ responsive** than the 0–90 fund — but it carries little information
 −35…+93 bp post-2001) is flattened to a constant 5.6 bp.
 
 - Cumulative carry drag, 1970→2001: **0–30 earns ~−5.2%** vs 0–90.
-- Month-to-month 0–30 vs 0–90 gap: pre-2001 **−159…+422 bp** (structural, on a
+- Month-to-month 0–30 vs 0–90 gap: pre-2001 **−159…+423 bp** (structural, on a
   proxied signal, largest during the 1980–81 rate rollercoaster); post-2001
   **−35…+93 bp** (fully observed).
 
-**Do not** read pre-2001-07 month-to-month 0–30/0–90 divergences as observed
-market behaviour. From 2001-07 onward every point is a real 4-week bill.
+**Do not** read month-to-month 0–30/0–90 divergences through 2001-07 as observed
+market behaviour. From 2001-08 onward every point is a real 4-week bill.
 
 ## Validations
 
 | Check | Result |
 |---|---|
-| discount→bond-equivalent conversion vs FRED `DGS3MO` (independent investment-basis 3-mo CMT), 538 mo | mean −0.9 bp, stdev 2.2 bp |
+| discount→bond-equivalent conversion vs FRED `DGS3MO` (independent investment-basis 3-mo CMT), 541 mo | mean −0.9 bp, stdev 2.2 bp |
 | single-tenor proxy for the bucket (3M vs 1M spread, 2001+) | avg 5.6 bp |
 | full-period TR CAGR vs known long-run T-bill returns | 0–90 4.67%, 0–30 4.54% (in band) |
 
 ## Regenerate
 
 ```bash
-# refetch inputs if needed
-for id in DTB3 DTB4WK DFF SOFR; do
-  curl -sSL "https://fred.stlouisfed.org/graph/fredgraph.csv?id=$id" -o data/$id.csv
-done
+scripts/rebuild.sh                      # all three steps below (or /rebuild in Claude Code)
+
+python3 scripts/fetch_fred.py           # refresh FRED inputs in data/ (pure Python)
 python3 scripts/build_mmf.py            # series CSVs (pure Python)
 .venv/bin/python3 scripts/plot_mmf.py   # comparison charts (needs matplotlib)
 ```

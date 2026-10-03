@@ -50,14 +50,14 @@ CHARTS = [
     {
         "name": "mmf_30-90DTM_compare",
         "A": ("0_90dtm", "0–90 DTM"), "B": ("0_30dtm", "0–30 DTM"),
-        "split": datetime(2001, 7, 1), "split_note": "0–30 DTM: proxied ← | → observed",
+        "split": datetime(2001, 8, 1), "split_note": "0–30 DTM: proxied ← | → observed",
         "titles": ("Money-market fund price index — 0–30 vs 0–90 DTM",
                    "Annual coupon rate — 0–30 vs 0–90 DTM",
                    "Monthly coupon delta — 0–90 minus 0–30"),
         "delta_ylabel": "Monthly coupon Δ\n0–90 − 0–30 (bp of NAV)",
         "delta_more": ("0–90 pays more", "0–30 pays more"),
         "caption": ("0% TER, rolling T-bill ladders. Source: FRED daily T-bill "
-                    "rates (DTB3, DTB4WK). 0–30 DTM proxied before Jul-2001 — "
+                    "rates (DTB3, DTB4WK). 0–30 DTM proxied through Jul-2001 — "
                     "see MMF_SUMMARY.md."),
     },
     {
@@ -106,7 +106,7 @@ def build_fig(cfg):
     delta_bp = np.array([(a - b) * 1e4 for a, b in zip(cmA, cmB)])
     split = cfg["split"]
     ylo, yhi, price_yticks = price_window(pA, pB)
-    note_y = yhi - 0.03 * (yhi - ylo)
+    note_y = ylo + 0.03 * (yhi - ylo)   # bottom of the pane, clear of the lines
 
     fig, (ax1, ax2, ax3) = plt.subplots(
         3, 1, sharex=True, figsize=(11, 11.6),
@@ -126,7 +126,7 @@ def build_fig(cfg):
                   fontweight="bold", pad=8)
     ax1.legend(frameon=False, loc="upper left", labelcolor=INK2)
     ax1.text(split, note_y, "  " + cfg["split_note"], color=MUTED,
-             fontsize=8.5, va="top", ha="left")
+             fontsize=8.5, va="bottom", ha="left")
 
     # pane 2: annual coupon rate, linear
     ax2.plot(x, caA, color=CA, lw=1.8, label=lA)
