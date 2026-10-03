@@ -155,15 +155,14 @@ toolchain list above so they stay reproducible.
 
 ### Python: Debian 13 is externally managed (PEP 668)
 
-A system-wide `pip install` is blocked. Use a virtual environment per project:
+A system-wide `pip install` is blocked. The only Python dependency is matplotlib, for
+the charts; install it in a project virtual environment:
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt      # or: pip install -e ".[dev]"
+python3 -m venv .venv && .venv/bin/python3 -m pip install matplotlib
 ```
 
-(The current builder needs no packages; a venv is only needed if you add analysis deps.)
+(The fetcher and series builder need no packages; they run on the system `python3`.)
 
 ### Not required
 

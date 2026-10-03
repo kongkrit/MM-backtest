@@ -48,8 +48,9 @@ Session handoff for this project. Written by `/wrapup`; auto-loaded into context
 - Deleted in-between `output/` snapshots, keeping one coherent set per state.
 
 ## Current state
-- Committed through `1bb65af` (pushed). **Uncommitted:** the simplification pass (scripts, `/rebuild`
-  text, README, methodology, CLAUDE.md incl. the code principles, this file) and `git rm data/TB3MS.csv`.
+- Everything is committed and pushed to `origin/main` (the simplification pass is `baf1ba9`). Cleanup is
+  done; downstream work consuming the root CSVs has started. It should re-read whole files after each
+  rebuild, because the proxied 0–30 and SOFR history shifts slightly as the overlap spreads re-estimate.
 - All four series: **197001 → 202609, 681 rows each**; `tr_idx` = 100.000000 @ 197001.
   tr end / CAGR: 0–90 1332.35 / 4.67%, 0–30 1241.84 / 4.54%, 0dtm (SOFR) 1630.43 / 5.04%,
   0dtm_ff 1632.84 / 5.04%. Price range: 0–90 [98.98,101.00], 0–30 [99.67,100.33], cash flat 100.
@@ -63,7 +64,6 @@ Session handoff for this project. Written by `/wrapup`; auto-loaded into context
   - the full `rebuild.sh` passes with identical outputs.
 
 ## Next steps
-- Commit the simplification pass.
 - Monthly refresh is `scripts/rebuild.sh` (or `/rebuild`) any time after FRED posts the prior month's
   last day. On the 1st–2nd of a month the gate may stop it; rerun a day later. Doc stats stay
   "as of Sep-2026" until refreshed by hand.
