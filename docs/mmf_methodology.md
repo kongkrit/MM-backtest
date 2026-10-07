@@ -27,7 +27,7 @@ from 2018-04 and proxied before as fed funds minus the mean fed-funds − SOFR s
 (**~0.3 bp**, so pre-2018 ≈ `0dtm_fed_funds`). `0dtm_fed_funds` uses **effective
 fed funds** (unsecured, interbank, 1954+) as a reference benchmark. Both yield
 **above** the bill funds
-(CAGR ~5.0% vs 4.5–4.7%) — the T-bill safety/liquidity premium, a full-history
+(CAGR 5.06% vs 4.55–4.68%) — the T-bill safety/liquidity premium, a full-history
 average dominated by the 1970s-80s (in 2018+ all four sit within a few bp).
 
 Canonical latest series live at the **repo root**. Each build also writes a
@@ -72,7 +72,7 @@ the book is a ladder of remaining lives spread uniformly over 0–N days.
 Each fund runs over **all** FRED history (back to 1954), and only then is the
 window kept, so even its first rows hold a full ladder of real earlier bills. Both
 indices are then rebased to 100 at the window's first row (the base, `start_month`);
-every later row's change is that month's real return.
+every later row's change is that month's actual return.
 
 Month-average yields drive income; month-end yields drive the MtM — separated
 using the **daily** FRED series.

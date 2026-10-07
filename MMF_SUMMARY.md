@@ -42,13 +42,14 @@ overnight note below), so this choice is about correctness, not magnitude.
 last trading day; `coupon_rate_*` is the income earned over the month and **paid at
 month-end**. So the monthly total return booked at month-end is
 `coupon_rate_monthly + price change = tr_idx[m] / tr_idx[m−1] − 1` — no look-ahead.
-(The coupon *rate* is the month-average yield ÷12; the end-of-month yield is used
-only for the price mark.)
+(The coupon *rate* is built from month-average yields — for 0–90, the average of the
+last 3 months, since its bills were bought over 3 months; for the others, the current
+month — ÷12. The end-of-month yield is used only for the price mark.)
 
 **First row.** `196912` is the base: both indices are 100 there, meaning the level
-at the end of December 1969. Every later row carries that month's real return, so
+at the end of December 1969. Every later row carries that month's actual return, so
 the first monthly return is `tr_idx[197001] / 100 − 1` (January 1970). The base row's
-`coupon_rate_*` values are December 1969's real coupons, and no row is a warm-up: the
+`coupon_rate_*` values are December 1969's actual coupons, and no row is a warm-up: the
 build runs each fund over all FRED history (back to 1954) before cutting the window,
 so even the first rows' 0–90 coupons average a full 3 months of bills.
 
@@ -101,7 +102,7 @@ The 0–90 fund has **no such caveat** — real 3-month bill data across the ful
 `mmf_0dtm` (SOFR) and `mmf_0dtm_fed_funds` are overnight cash with a **flat NAV
 (=100)** — zero duration, so all return is coupon.
 
-- **They yield *above* the bills** (CAGR ~5.0% vs 4.5–4.7%). That's the T-bill
+- **They yield *above* the bills** (CAGR 5.06% vs 4.55–4.68%). That's the T-bill
   safety/liquidity premium — Treasuries yield less than equally-short cash — not a
   bug. Overnight cash is **not** a lower-yielding "shorter tier" than the bills.
 - **SOFR ≈ fed funds:** mean gap **+0.3 bp** over 2018-04+ (their real overlap); the
