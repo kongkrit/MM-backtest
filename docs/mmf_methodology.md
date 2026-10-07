@@ -120,7 +120,7 @@ market behaviour. From 2001-08 onward every point is a real 4-week bill.
 |---|---|
 | discount→bond-equivalent conversion vs FRED `DGS3MO` (independent investment-basis 3-mo CMT), 541 mo | mean −0.9 bp, stdev 2.2 bp |
 | single-tenor proxy for the bucket (3M vs 1M spread, 2001+) | avg 5.6 bp |
-| full-period TR CAGR vs known long-run T-bill returns | 0–90 4.67%, 0–30 4.54% (in band) |
+| full-period TR CAGR vs known long-run T-bill returns | 0–90 4.68%, 0–30 4.55% (in band) |
 
 ## Regenerate
 

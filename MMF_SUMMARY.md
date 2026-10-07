@@ -45,16 +45,32 @@ month-end**. So the monthly total return booked at month-end is
 (The coupon *rate* is the month-average yield ÷12; the end-of-month yield is used
 only for the price mark.)
 
+**First row.** `197001` is the starting point: both indices are 100 there, and they
+don't include January 1970's return. `price_idx` is also 100 at the *beginning* of
+January: the build sets the first month's price change to 0, so the NAV starts and
+ends January at 100. Read `tr_idx` = 100 as the level at the end of January
+(start of February), so the first monthly return is `tr_idx[197002] / 100 − 1`
+(February 1970). The 197001 `coupon_rate_*` values still show January's coupon,
+but it isn't compounded into `tr_idx`.
+
+For **0–90 DTM only**, the first two coupons average fewer months of bills than
+the model's 3, because the build starts at 197001. The 197001 coupon uses only January's
+yield (0.00678 vs 0.00658 with the full 3-month average). The 197002 coupon uses
+January–February (0.00646 vs 0.00655), and it *is* in `tr_idx`, so every later 0–90
+`tr_idx` is about 0.009% low. The 0–30 and overnight funds average only the
+current month, so they're unaffected.
+
 ## At a glance
 
-*As of the Sep-2026 build (197001 → 202609, 681 rows).*
+*As of the Sep-2026 build (197001 → 202609, 681 rows; CAGR over the 680 months of
+return, Feb-1970 on).*
 
 | Fund | tr_idx 1970 → 2026 | TR CAGR | price_idx |
 |---|---|---|---|
-| 0–90 DTM (bills) | 100.00 → 1332.35 | 4.67% | 98.98 – 101.00 |
-| 0–30 DTM (bills) | 100.00 → 1241.84 | 4.54% | 99.67 – 100.33 |
-| **0DTM cash — SOFR** (`mmf_0dtm`) | 100.00 → 1630.43 | **5.04%** | flat 100 |
-| 0DTM fed funds (benchmark) | 100.00 → 1632.84 | 5.04% | flat 100 |
+| 0–90 DTM (bills) | 100.00 → 1332.35 | 4.68% | 98.98 – 101.00 |
+| 0–30 DTM (bills) | 100.00 → 1241.84 | 4.55% | 99.67 – 100.33 |
+| **0DTM cash — SOFR** (`mmf_0dtm`) | 100.00 → 1630.43 | **5.05%** | flat 100 |
+| 0DTM fed funds (benchmark) | 100.00 → 1632.84 | 5.05% | flat 100 |
 
 Among the **bills**, shorter = a bit less yield and a steadier NAV. The
 **overnight-cash** funds yield *more* than the bills (see the note below) — the

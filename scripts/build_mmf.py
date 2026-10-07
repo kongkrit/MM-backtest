@@ -150,10 +150,10 @@ if __name__ == "__main__":
         out = build_fund(rates[f["key"]], f["tenor"], f["max_dtm"])
         write(out, os.path.join(ROOT, f"mmf_{f['key']}.csv"))
         write(out, os.path.join(OUTD, f"{stamp}_mmf_{f['key']}.csv"))
-        a, z = out[0], out[-1]
+        a, z = out[0], out[-1]    # a is the 100 base: len(out) - 1 months of return follow
         print(f"mmf_{f['key']}: {len(out)} rows {a['yyyymm']}-{z['yyyymm']}  "
               f"tr {a['tr_idx']:.2f}->{z['tr_idx']:.2f}  "
-              f"CAGR {(z['tr_idx'] / a['tr_idx']) ** (12 / len(out)) * 100 - 100:.3f}%  "
+              f"CAGR {(z['tr_idx'] / a['tr_idx']) ** (12 / (len(out) - 1)) * 100 - 100:.3f}%  "
               f"price[{min(r['price_idx'] for r in out):.2f},"
               f"{max(r['price_idx'] for r in out):.2f}]")
     print(f"build stamp: {stamp}")

@@ -52,8 +52,8 @@ Session handoff for this project. Written by `/wrapup`; auto-loaded into context
   done; downstream work consuming the root CSVs has started. It should re-read whole files after each
   rebuild, because the proxied 0–30 and SOFR history shifts slightly as the overlap spreads re-estimate.
 - All four series: **197001 → 202609, 681 rows each**; `tr_idx` = 100.000000 @ 197001.
-  tr end / CAGR: 0–90 1332.35 / 4.67%, 0–30 1241.84 / 4.54%, 0dtm (SOFR) 1630.43 / 5.04%,
-  0dtm_ff 1632.84 / 5.04%. Price range: 0–90 [98.98,101.00], 0–30 [99.67,100.33], cash flat 100.
+  tr end / CAGR: 0–90 1332.35 / 4.68%, 0–30 1241.84 / 4.55%, 0dtm (SOFR) 1630.43 / 5.05%,
+  0dtm_ff 1632.84 / 5.05%. Price range: 0–90 [98.98,101.00], 0–30 [99.67,100.33], cash flat 100.
 - Proxies (Sep-2026 build): 3M−4W spread avg 5.6 / eom 5.3 bp, RMSE 13.2 bp. Fed funds − SOFR 0.3 bp.
 - `output/` latest coherent set: `20261003_1131_*` CSVs + `20261003_1213_*` PNGs. Older sets
   `20260704_1356_*` and `20260706_1303/1304_*` kept.
