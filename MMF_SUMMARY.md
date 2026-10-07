@@ -33,10 +33,10 @@ overnight note below), so this choice is about correctness, not magnitude.
 | Column | Meaning |
 |---|---|
 | `yyyymm` | Month key, integer (e.g. `197001` = Jan 1970). |
-| `price_idx` | Price/NAV index of the **distributing** class (coupons paid out). **= 100 at the build-window start (Jan-1970).** Bills wiggle with yields; the cash funds are **flat 100** (zero duration). |
+| `price_idx` | Price/NAV index of the **distributing** class (coupons paid out). **= 100 in the 197001 row** (see **First row** below). Bills wiggle with yields; the cash funds are **flat 100** (zero duration). |
 | `coupon_rate_monthly` | Monthly coupon as a fraction of NAV (decimal) — cash a distributing holder receives for that month. |
 | `coupon_rate_annual` | `coupon_rate_monthly × 12` (simple annualized, not compounded). |
-| `tr_idx` | Total-return index — **accumulating** (coupons reinvested). **= 100 at the same build-window start (Jan-1970).** |
+| `tr_idx` | Total-return index — **accumulating** (coupons reinvested). **= 100 in the 197001 row** (see **First row** below). |
 
 **Timing.** Row `YYYYMM` is *as of month-end*. `price_idx` is the NAV mark at the
 last trading day; `coupon_rate_*` is the income earned over the month and **paid at
