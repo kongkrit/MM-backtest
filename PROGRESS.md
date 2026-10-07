@@ -3,7 +3,7 @@
 Session handoff for this project. Written by `/wrapup`; auto-loaded into context at session start.
 
 ## What we did (2026-10-03)
-- **Retired `end_month`.** `build_range.json` is now just `{ "start_month": 197001 }`. `load_build_range()`
+- **Retired `end_month`.** `build_range.json` holds only `start_month` (now 196912; see 2026-10-07). `load_build_range()`
   computes the end as the **last complete calendar month before today**: the day before this month's 1st
   (run 2026-10-03 → 202609; January → prior December).
 - **Coverage gate (fail loudly), inside `load_daily()`.** Each input must have ≥ `MIN_OBS` quotes in END_YM
@@ -47,16 +47,33 @@ Session handoff for this project. Written by `/wrapup`; auto-loaded into context
   `data/TB3MS.csv`.
 - Deleted in-between `output/` snapshots, keeping one coherent set per state.
 
+## What we did (2026-10-07)
+- **Real 196912 base row for downstream** (who flagged `mmf_0_90dtm.csv` in particular).
+  - `start_month` → **196912**. Both indices are 100 there (end of Dec 1969), so January 1970 now has a
+    real return.
+  - `build_fund()` runs each fund over **all** FRED history (from 1954) before cutting the window, then
+    rebases both indices at the first row. This removed the 0–90 short-ladder warm-up: 197001/197002
+    coupons were 0.00678/0.00646 (1–2 months averaged), now 0.00658/0.00655 (full 3 months), and later
+    0–90 `tr_idx` was ~0.009% low.
+  - Verified:
+    - the 196912 0–90 coupon recomputed from raw DTB3 matches exactly (0.07595964);
+    - coupons after the warm-up are unchanged;
+    - month-to-month `tr_idx` returns are unchanged to ≤ 1.3e-8 (CSV rounding).
+  - The chart's axis label now reads "=100 @ Dec 1969". The docs' "First row" note was rewritten, the
+    warm-up caveat removed, and the stats refreshed.
+
 ## Current state
 - Everything is committed and pushed to `origin/main` (the simplification pass is `baf1ba9`). Cleanup is
   done; downstream work consuming the root CSVs has started. It should re-read whole files after each
   rebuild, because the proxied 0–30 and SOFR history shifts slightly as the overlap spreads re-estimate.
-- All four series: **197001 → 202609, 681 rows each**; `tr_idx` = 100.000000 @ 197001.
-  tr end / CAGR: 0–90 1332.35 / 4.68%, 0–30 1241.84 / 4.55%, 0dtm (SOFR) 1630.43 / 5.05%,
-  0dtm_ff 1632.84 / 5.05%. Price range: 0–90 [98.98,101.00], 0–30 [99.67,100.33], cash flat 100.
+- All four series: **196912 → 202609, 682 rows each**. Both indices = 100 @ 196912 (the base row);
+  681 months of return from Jan 1970.
+  tr end / CAGR: 0–90 1341.51 / 4.68%, 0–30 1250.16 / 4.55%, 0dtm (SOFR) 1642.80 / 5.06%,
+  0dtm_ff 1645.23 / 5.06%. Price range: 0–90 [99.00,101.02], 0–30 [99.68,100.33], cash flat 100.
 - Proxies (Sep-2026 build): 3M−4W spread avg 5.6 / eom 5.3 bp, RMSE 13.2 bp. Fed funds − SOFR 0.3 bp.
-- `output/` latest coherent set: `20261003_1131_*` CSVs + `20261003_1213_*` PNGs. Older sets
-  `20260704_1356_*` and `20260706_1303/1304_*` kept.
+  0–30 proxied for 380 window rows (through 2001-07), SOFR for 580 (through 2018-03).
+- `output/` latest set: `20261007_1839_*` (196912 base). Older sets kept: `20261003_1131/1213_*`
+  (197001 base), `20260704_1356_*`, `20260706_1303/1304_*`.
 - Verified after simplifying:
   - the end-month rule (incl. the January wrap);
   - the gate exits for 202610 and loads for 202609;

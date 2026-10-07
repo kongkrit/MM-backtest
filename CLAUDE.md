@@ -6,7 +6,9 @@ Guidance for Claude Code when working in this repository.
 
 **MM-backtest** builds synthetic monthly **price and total-return series for 0% TER money-market funds** —
 two rolling T-bill ladders (0–90 and 0–30 DTM) and two overnight-cash funds (SOFR, canonical; fed funds,
-benchmark) — from public FRED daily rates, Jan 1970 through the last complete month. Consumers read the
+benchmark) — from public FRED daily rates, from a Dec 1969 base row (both indices 100; returns start
+Jan 1970) through the last complete month. Each fund is computed over all FRED history before the window
+is cut, so no row is a warm-up. Consumers read the
 canonical CSVs at the repo root; [MMF_SUMMARY.md](MMF_SUMMARY.md) explains *what* they are,
 [docs/mmf_methodology.md](docs/mmf_methodology.md) explains *how*.
 

@@ -1,10 +1,10 @@
 # MMF series — consumer summary
 
 Synthetic **0% TER** (no fee drag) money-market fund series: two rolling **T-bill**
-ladders and two **overnight-cash** funds. Monthly, from **Jan 1970** (`start_month`
-in `build_range.json` at the repo root, the single source of truth) through the
-**last complete calendar month before the build date**; every fund has the same
-row count.
+ladders and two **overnight-cash** funds. Monthly, from a **Dec 1969 base row**
+(`start_month` in `build_range.json` at the repo root, the single source of truth;
+returns start Jan 1970) through the **last complete calendar month before the build
+date**; every fund has the same row count.
 
 ## Files
 
@@ -33,10 +33,10 @@ overnight note below), so this choice is about correctness, not magnitude.
 | Column | Meaning |
 |---|---|
 | `yyyymm` | Month key, integer (e.g. `197001` = Jan 1970). |
-| `price_idx` | Price/NAV index of the **distributing** class (coupons paid out). **= 100 in the 197001 row** (see **First row** below). Bills wiggle with yields; the cash funds are **flat 100** (zero duration). |
+| `price_idx` | Price/NAV index of the **distributing** class (coupons paid out). **= 100 in the 196912 row** (see **First row** below). Bills wiggle with yields; the cash funds are **flat 100** (zero duration). |
 | `coupon_rate_monthly` | Monthly coupon as a fraction of NAV (decimal) — cash a distributing holder receives for that month. |
 | `coupon_rate_annual` | `coupon_rate_monthly × 12` (simple annualized, not compounded). |
-| `tr_idx` | Total-return index — **accumulating** (coupons reinvested). **= 100 in the 197001 row** (see **First row** below). |
+| `tr_idx` | Total-return index — **accumulating** (coupons reinvested). **= 100 in the 196912 row** (see **First row** below). |
 
 **Timing.** Row `YYYYMM` is *as of month-end*. `price_idx` is the NAV mark at the
 last trading day; `coupon_rate_*` is the income earned over the month and **paid at
@@ -45,32 +45,24 @@ month-end**. So the monthly total return booked at month-end is
 (The coupon *rate* is the month-average yield ÷12; the end-of-month yield is used
 only for the price mark.)
 
-**First row.** `197001` is the starting point: both indices are 100 there, and they
-don't include January 1970's return. `price_idx` is also 100 at the *beginning* of
-January: the build sets the first month's price change to 0, so the NAV starts and
-ends January at 100. Read `tr_idx` = 100 as the level at the end of January
-(start of February), so the first monthly return is `tr_idx[197002] / 100 − 1`
-(February 1970). The 197001 `coupon_rate_*` values still show January's coupon,
-but it isn't compounded into `tr_idx`.
-
-For **0–90 DTM only**, the first two coupons average fewer months of bills than
-the model's 3, because the build starts at 197001. The 197001 coupon uses only January's
-yield (0.00678 vs 0.00658 with the full 3-month average). The 197002 coupon uses
-January–February (0.00646 vs 0.00655), and it *is* in `tr_idx`, so every later 0–90
-`tr_idx` is about 0.009% low. The 0–30 and overnight funds average only the
-current month, so they're unaffected.
+**First row.** `196912` is the base: both indices are 100 there, meaning the level
+at the end of December 1969. Every later row carries that month's real return, so
+the first monthly return is `tr_idx[197001] / 100 − 1` (January 1970). The base row's
+`coupon_rate_*` values are December 1969's real coupons, and no row is a warm-up: the
+build runs each fund over all FRED history (back to 1954) before cutting the window,
+so even the first rows' 0–90 coupons average a full 3 months of bills.
 
 ## At a glance
 
-*As of the Sep-2026 build (197001 → 202609, 681 rows; CAGR over the 680 months of
-return, Feb-1970 on).*
+*As of the Sep-2026 build (196912 → 202609, 682 rows; CAGR over the 681 months of
+return, Jan-1970 on).*
 
-| Fund | tr_idx 1970 → 2026 | TR CAGR | price_idx |
+| Fund | tr_idx Dec-1969 → Sep-2026 | TR CAGR | price_idx |
 |---|---|---|---|
-| 0–90 DTM (bills) | 100.00 → 1332.35 | 4.68% | 98.98 – 101.00 |
-| 0–30 DTM (bills) | 100.00 → 1241.84 | 4.55% | 99.67 – 100.33 |
-| **0DTM cash — SOFR** (`mmf_0dtm`) | 100.00 → 1630.43 | **5.05%** | flat 100 |
-| 0DTM fed funds (benchmark) | 100.00 → 1632.84 | 5.05% | flat 100 |
+| 0–90 DTM (bills) | 100.00 → 1341.51 | 4.68% | 99.00 – 101.02 |
+| 0–30 DTM (bills) | 100.00 → 1250.16 | 4.55% | 99.68 – 100.33 |
+| **0DTM cash — SOFR** (`mmf_0dtm`) | 100.00 → 1642.80 | **5.06%** | flat 100 |
+| 0DTM fed funds (benchmark) | 100.00 → 1645.23 | 5.06% | flat 100 |
 
 Among the **bills**, shorter = a bit less yield and a steadier NAV. The
 **overnight-cash** funds yield *more* than the bills (see the note below) — the
@@ -91,7 +83,7 @@ the files at the repo root.
 ## ⚠️ Caution 1 — the 0–30 DTM series through July 2001
 
 4-week Treasury bills did not exist before the Treasury began auctioning them in
-**July 2001**. For **1970 → July 2001** the 0–30 series is **modeled from 3-month
+**July 2001**. For **Dec 1969 → July 2001** the 0–30 series is **modeled from 3-month
 bill data**, not observed 1-month bills (July 2001 itself has a single 4-week quote,
 on the 31st — too few days for a monthly average).
 
@@ -102,7 +94,7 @@ on the 31st — too few days for a monthly average).
   1M-vs-3M spread is assumed constant). Don't build 0–30-vs-0–90 spread/relative-value
   signals on that window; use 0–90 alone there, or start at 2001-08.
 
-The 0–90 fund has **no such caveat** — real 3-month bill data across the full 1970+ history.
+The 0–90 fund has **no such caveat** — real 3-month bill data across the full history.
 
 ## ⚠️ Caution 2 — the overnight "cash" funds
 

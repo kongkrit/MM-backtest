@@ -101,26 +101,31 @@ def proxy_fill(base, real, tenor):
 
 
 def build_fund(rates, tenor, max_dtm):
-    """Monthly rows for one fund from its {yyyymm: (avg, eom)} discount rates."""
-    months = sorted(m for m in rates if START_YM <= m <= END_YM)
+    """Monthly rows for one fund from its {yyyymm: (avg, eom)} discount rates.
+    Runs over all history, not just the window, so the first window rows hold a
+    full ladder of real earlier bills; then keeps the window and rebases both
+    indices to 100 at its first row (the base: returns start the month after)."""
+    months = sorted(m for m in rates if m <= END_YM)
     y_avg = [investment_yield(rates[m][0], tenor) for m in months]
     y_eom = [investment_yield(rates[m][1], tenor) for m in months]
     duration = (max_dtm / 2.0) / 365.0        # average remaining life, years
     ladder = max(1, round(max_dtm / 30.0))    # months of purchases still held
 
     out = []
-    price_idx, tr_raw = 100.0, 1.0
+    price, tr = 1.0, 1.0
     for i, m in enumerate(months):
         held = y_avg[max(0, i - ladder + 1): i + 1]   # yields locked in by bills still held
         coupon_a = sum(held) / len(held)
         coupon_m = coupon_a / 12.0
         price_ret = -duration * (y_eom[i] - y_eom[i - 1]) if i else 0.0
-        price_idx *= (1.0 + price_ret)
-        tr_raw *= (1.0 + coupon_m + price_ret)
-        out.append({"yyyymm": m, "price_idx": price_idx, "coupon_rate_monthly": coupon_m,
-                    "coupon_rate_annual": coupon_a, "tr_raw": tr_raw})
-    for r in out:                                     # rebase: tr_idx = 100 at the window start
-        r["tr_idx"] = r["tr_raw"] / out[0]["tr_raw"] * 100.0
+        price *= (1.0 + price_ret)
+        tr *= (1.0 + coupon_m + price_ret)
+        if m >= START_YM:
+            out.append({"yyyymm": m, "price": price, "coupon_rate_monthly": coupon_m,
+                        "coupon_rate_annual": coupon_a, "tr": tr})
+    for r in out:
+        r["price_idx"] = r["price"] / out[0]["price"] * 100.0
+        r["tr_idx"] = r["tr"] / out[0]["tr"] * 100.0
     return out
 
 

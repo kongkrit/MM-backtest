@@ -104,7 +104,7 @@ def build_fig(cfg):
     ax1.set_yticks(price_yticks)
     ax1.yaxis.set_major_formatter(ScalarFormatter())
     ax1.minorticks_off()
-    ax1.set_ylabel(f"Price / NAV index\n(=100 @ {x[0].year}, log scale)")
+    ax1.set_ylabel(f"Price / NAV index\n(=100 @ {x[0]:%b %Y}, log scale)")
     ax1.legend(frameon=False, loc="upper left", labelcolor=INK2)
     ax1.text(split, note_y, "  " + cfg["split_note"], color=MUTED,
              fontsize=8.5, va="bottom", ha="left")
