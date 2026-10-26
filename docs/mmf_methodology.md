@@ -79,16 +79,24 @@ using the **daily** FRED series.
 
 ## Data sources (public, FRED)
 
-| Series | Use | Coverage |
-|---|---|---|
-| `DTB3` — 3-month bill, discount basis, daily | 0–90 fund yield (all history) | 1954→ |
-| `DTB4WK` — 4-week bill, discount basis, daily | 0–30 fund yield | **2001-07→** |
-| `SOFR` — secured overnight financing rate, daily | 0dtm (canonical cash) | **2018-04→** |
-| `DFF` — effective fed funds, daily | 0dtm_fed_funds (benchmark); SOFR proxy base | 1954→ |
+All four files are built from exactly these four FRED series:
 
-Fetch pattern: `https://fred.stlouisfed.org/graph/fredgraph.csv?id=<ID>`.
-These come from the Federal Reserve H.15 release — the official secondary-market
-bill rates, essentially never revised.
+| FRED ID | FRED title | Source | Frequency | First obs | Feeds |
+|---|---|---|---|---|---|
+| [`DTB3`](https://fred.stlouisfed.org/series/DTB3) | 3-Month Treasury Bill Secondary Market Rate, Discount Basis | Federal Reserve Board, H.15 | Daily | 1954-01-04 | `mmf_0_90dtm` (all rows); `mmf_0_30dtm` through 2001-07 (proxy base) |
+| [`DTB4WK`](https://fred.stlouisfed.org/series/DTB4WK) | 4-Week Treasury Bill Secondary Market Rate, Discount Basis | Federal Reserve Board, H.15 | Daily | 2001-07-31 | `mmf_0_30dtm` from **2001-08** |
+| [`SOFR`](https://fred.stlouisfed.org/series/SOFR) | Secured Overnight Financing Rate | Federal Reserve Bank of New York | Daily | 2018-04-03 | `mmf_0dtm` from **2018-04** |
+| [`DFF`](https://fred.stlouisfed.org/series/DFF) | Federal Funds Effective Rate | Federal Reserve Board, H.15 | Daily, 7-Day | 1954-07-01 | `mmf_0dtm_fed_funds` (all rows); `mmf_0dtm` through 2018-03 (proxy base) |
+
+`scripts/fetch_fred.py` downloads each in full from
+`https://fred.stlouisfed.org/graph/fredgraph.csv?id=<ID>` and saves it unmodified
+as `data/<ID>.csv`. All are in percent, not seasonally adjusted. "Daily, 7-Day"
+means `DFF` also has weekend and holiday rows, each repeating the prior business
+day's rate; the others have business days only. "Proxy base" means that series
+minus its mean spread to the real series over the months both exist (0–30 proxy:
+next section; SOFR proxy: **Funds** above).
+The H.15 bill rates are the official secondary-market quotes, essentially never
+revised.
 
 ## ⚠️ Pre-2001 proxy — READ THIS for the 0–30 fund
 

@@ -6,7 +6,8 @@ holding short-dated U.S. Treasuries / cash. The build window starts at
 where both indices are 100; returns start Jan 1970) and ends at
 the **last complete calendar month before the build date** (a build run on
 2026-10-03 ends at Sep 2026). Built from public Federal Reserve (FRED) daily
-rates — no paid data feed required.
+rates — no paid data feed required. The exact FRED series, the model and its
+validations are in [`docs/mmf_methodology.md`](docs/mmf_methodology.md).
 
 ## The series
 

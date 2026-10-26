@@ -4,7 +4,8 @@ Synthetic **0% TER** (no fee drag) money-market fund series: two rolling **T-bil
 ladders and two **overnight-cash** funds. Monthly, from a **Dec 1969 base row**
 (`start_month` in `build_range.json` at the repo root, the single source of truth;
 returns start Jan 1970) through the **last complete calendar month before the build
-date**; every fund has the same row count.
+date**; every fund has the same row count. The exact FRED input series and how the
+funds are built from them are in [`docs/mmf_methodology.md`](docs/mmf_methodology.md).
 
 ## Files
 
@@ -112,4 +113,4 @@ The 0–90 fund has **no such caveat** — real 3-month bill data across the ful
   pre-2018 secured-vs-unsecured differences.
 
 ---
-Full model details: `docs/mmf_methodology.md`.
+Full model details: [`docs/mmf_methodology.md`](docs/mmf_methodology.md).
