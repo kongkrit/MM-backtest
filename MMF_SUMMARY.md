@@ -62,8 +62,8 @@ return, Jan-1970 on).*
 | Fund | tr_idx Dec-1969 → Sep-2026 | TR CAGR | price_idx |
 |---|---|---|---|
 | 0–90 DTM (bills) | 100.00 → 1341.51 | 4.68% | 99.00 – 101.02 |
-| 0–30 DTM (bills) | 100.00 → 1250.16 | 4.55% | 99.68 – 100.33 |
-| **0DTM cash — SOFR** (`mmf_0dtm`) | 100.00 → 1642.80 | **5.06%** | flat 100 |
+| 0–30 DTM (bills) | 100.00 → 1250.06 | 4.55% | 99.68 – 100.33 |
+| **0DTM cash — SOFR** (`mmf_0dtm`) | 100.00 → 1642.92 | **5.06%** | flat 100 |
 | 0DTM fed funds (benchmark) | 100.00 → 1645.23 | 5.06% | flat 100 |
 
 Among the **bills**, shorter = a bit less yield and a steadier NAV. The
@@ -106,8 +106,9 @@ The 0–90 fund has **no such caveat** — real 3-month bill data across the ful
 - **They yield *above* the bills** (CAGR 5.06% vs 4.55–4.68%). That's the T-bill
   safety/liquidity premium — Treasuries yield less than equally-short cash — not a
   bug. Overnight cash is **not** a lower-yielding "shorter tier" than the bills.
-- **SOFR ≈ fed funds:** mean gap **+0.3 bp** over 2018-04+ (their real overlap); the
-  real signal is repo-stress months — e.g. **Sept-2019, SOFR +23 bp over fed funds**.
+- **SOFR ≈ fed funds:** SOFR averages **0.3 bp below** fed funds over 2018-04+ (their
+  real overlap); the real signal is repo-stress months — e.g. **Sept-2019, SOFR +23 bp
+  over fed funds**.
 - **`mmf_0dtm` (SOFR) is real only from 2018-04.** Before that it is proxied as fed
   funds minus the ~0 bp spread, so pre-2018 it ≈ `mmf_0dtm_fed_funds`. Don't read
   pre-2018 secured-vs-unsecured differences.

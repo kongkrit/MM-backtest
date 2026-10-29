@@ -62,18 +62,38 @@ Session handoff for this project. Written by `/wrapup`; auto-loaded into context
   - The chart's axis label now reads "=100 @ Dec 1969". The docs' "First row" note was rewritten, the
     warm-up caveat removed, and the stats refreshed.
 
+## What we did (2026-10-29)
+- **`/rebuild`** fetched data through 2026-10-27 (DTB3, DTB4WK, DFF) and 2026-10-28 (SOFR), adding
+  +18/+18/+26/+19 rows. The window is still 196912 → 202609, because October isn't complete. 0–90 and
+  fed funds are byte-identical. 0–30 and SOFR moved on every row (max 0.026 / 0.016 bp coupon) because
+  the October overlap data re-fit the proxy spreads.
+- **MMF_SUMMARY:** refreshed the two "At a glance" cells that moved (0–30 tr end 1250.16 → 1250.06, SOFR
+  1642.80 → 1642.92) after reproducing the old values from the previous CSVs. The CAGRs are unchanged at
+  2 dp. Fixed the sign in Caution 2: SOFR averages **0.3 bp *below*** fed funds over 2018-04+ (CSV mean
+  −0.26 bp over 102 months); the old "+0.3 bp" read as SOFR above. README was already generic.
+- **Pruned `output/`, strict exact subsets only (your choice).** Deleted 4 CSVs:
+  - `20260706_1303` 0_90 and fed_funds: every row is in `20261003_1131`.
+  - `20261007_1839` 0_90 and fed_funds: byte-identical to `20261029_2057`.
+  - Kept the proxied 0_30/0dtm CSVs and the PNGs. They're never exact subsets because each rebuild
+    re-fits the proxy spread.
+
 ## Current state
-- Everything is committed and pushed to `origin/main` (the simplification pass is `baf1ba9`). Cleanup is
-  done; downstream work consuming the root CSVs has started. It should re-read whole files after each
-  rebuild, because the proxied 0–30 and SOFR history shifts slightly as the overlap spreads re-estimate.
+- Everything is committed and pushed to `origin/main`. Downstream work consuming the root CSVs has
+  started. It should re-read whole files after each rebuild, because the proxied 0–30 and SOFR history
+  shifts slightly as the overlap spreads re-estimate.
 - All four series: **196912 → 202609, 682 rows each**. Both indices = 100 @ 196912 (the base row);
   681 months of return from Jan 1970.
-  tr end / CAGR: 0–90 1341.51 / 4.68%, 0–30 1250.16 / 4.55%, 0dtm (SOFR) 1642.80 / 5.06%,
+  tr end / CAGR: 0–90 1341.51 / 4.68%, 0–30 1250.06 / 4.55%, 0dtm (SOFR) 1642.92 / 5.06%,
   0dtm_ff 1645.23 / 5.06%. Price range: 0–90 [99.00,101.02], 0–30 [99.68,100.33], cash flat 100.
-- Proxies (Sep-2026 build): 3M−4W spread avg 5.6 / eom 5.3 bp, RMSE 13.2 bp. Fed funds − SOFR 0.3 bp.
-  0–30 proxied for 380 window rows (through 2001-07), SOFR for 580 (through 2018-03).
-- `output/` latest set: `20261007_1839_*` (196912 base). Older sets kept: `20261003_1131/1213_*`
-  (197001 base), `20260704_1356_*`, `20260706_1303/1304_*`.
+- Inputs end 2026-10-27 (DTB3, DTB4WK, DFF) and 2026-10-28 (SOFR).
+- Proxies (2026-10-29 build): 3M−4W spread avg 5.7 / eom 5.3 bp, RMSE 13.2 bp. Fed funds − SOFR avg
+  0.2 bp / eom −4.4 bp, RMSE 4.3 bp. The build fits over all overlap days, including partial Oct-2026, so
+  this differs from the 0.26 bp CSV-window mean. 0–30 proxied for 380 window rows (through 2001-07), SOFR
+  for 580 (through 2018-03).
+- `output/` snapshots:
+  - Latest, full set: `20261029_2057_*`.
+  - Full: `20261003_1131/1213_*` (197001 base) and `20260704_1356_*` (197201 base).
+  - Partial, only the 0_30/0dtm CSVs plus both PNGs: `20261007_1839_*` and `20260706_1303/1304_*`.
 - Verified after simplifying:
   - the end-month rule (incl. the January wrap);
   - the gate exits for 202610 and loads for 202609;
@@ -84,6 +104,8 @@ Session handoff for this project. Written by `/wrapup`; auto-loaded into context
 - Monthly refresh is `scripts/rebuild.sh` (or `/rebuild`) any time after FRED posts the prior month's
   last day. On the 1st–2nd of a month the gate may stop it; rerun a day later. Doc stats stay
   "as of Sep-2026" until refreshed by hand.
+- **Next: the Oct-2026 row.** Run `/rebuild` from about 2026-11-03, then refresh the doc stats to "as of
+  the Oct-2026 build" (683 rows, 682 months of return).
 - Optional regime stress check: decompose carry vs MtM through 1973-74, 1980-81, 2008, 2022.
 - Add more buckets (e.g. 0–180 DTM) via the `FUNDS` table (and `SERIES` if they need new inputs).
 
@@ -91,4 +113,5 @@ Session handoff for this project. Written by `/wrapup`; auto-loaded into context
 - Do downstream consumers need the 0–30 series pre-2001 given the proxy caveat — or start it at 2001-08
   for relative-value work?
 - Should `output/` snapshots keep accumulating in-repo (every `/rebuild` adds 6 files), or move to
-  gitignored build-history?
+  gitignored build-history? Pruning exact-subset CSVs saves little: the 0–90 and fed-funds files dedupe,
+  but 0–30, SOFR and the PNGs change on every build.
