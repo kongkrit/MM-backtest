@@ -136,7 +136,7 @@ market behaviour. From 2001-08 onward every point is a real 4-week bill.
 ## Regenerate
 
 ```bash
-scripts/rebuild.sh                      # all three steps below (or /update in Claude Code)
+scripts/rebuild.sh                      # all three steps below (or /update-data in Claude Code)
 
 python3 scripts/fetch_fred.py           # refresh FRED inputs in data/ (pure Python)
 python3 scripts/build_mmf.py            # series CSVs (pure Python)

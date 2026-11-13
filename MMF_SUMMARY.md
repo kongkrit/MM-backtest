@@ -26,8 +26,8 @@ Use **`mmf_0dtm`** (SOFR). It is the secured overnight Treasury-repo rate — wh
 government / Treasury money-market fund (VMFXX, SPAXX, VUSXX, SGOV-style) actually
 earns, i.e. the cash you can buy and hold in a brokerage account.
 `mmf_0dtm_fed_funds` is the *unsecured interbank* rate: a reference benchmark you
-cannot directly hold. The two differ by only **~0.3 bp** on average (see the
-overnight note below), so this choice is about correctness, not magnitude.
+cannot directly hold. The two differ by only a fraction of a basis point on average
+(see the overnight note below), so this choice is about correctness, not magnitude.
 
 ## Columns
 
@@ -56,15 +56,15 @@ so even the first rows' 0–90 coupons average a full 3 months of bills.
 
 ## At a glance
 
-*As of the Sep-2026 build (196912 → 202609, 682 rows; CAGR over the 681 months of
+*As of the Oct-2026 build (196912 → 202610, 683 rows; CAGR over the 682 months of
 return, Jan-1970 on).*
 
-| Fund | tr_idx Dec-1969 → Sep-2026 | TR CAGR | price_idx |
+| Fund | tr_idx Dec-1969 → Oct-2026 | TR CAGR | price_idx |
 |---|---|---|---|
-| 0–90 DTM (bills) | 100.00 → 1341.51 | 4.68% | 99.00 – 101.02 |
-| 0–30 DTM (bills) | 100.00 → 1250.06 | 4.55% | 99.68 – 100.33 |
-| **0DTM cash — SOFR** (`mmf_0dtm`) | 100.00 → 1642.92 | **5.06%** | flat 100 |
-| 0DTM fed funds (benchmark) | 100.00 → 1645.23 | 5.06% | flat 100 |
+| 0–90 DTM (bills) | 100.00 → 1346.05 | 4.68% | 99.00 – 101.02 |
+| 0–30 DTM (bills) | 100.00 → 1254.19 | 4.55% | 99.68 – 100.33 |
+| **0DTM cash — SOFR** (`mmf_0dtm`) | 100.00 → 1648.37 | **5.05%** | flat 100 |
+| 0DTM fed funds (benchmark) | 100.00 → 1650.63 | 5.06% | flat 100 |
 
 Among the **bills**, shorter = a bit less yield and a steadier NAV. The
 **overnight-cash** funds yield *more* than the bills (see the note below) — the
@@ -103,10 +103,10 @@ The 0–90 fund has **no such caveat** — real 3-month bill data across the ful
 `mmf_0dtm` (SOFR) and `mmf_0dtm_fed_funds` are overnight cash with a **flat NAV
 (=100)** — zero duration, so all return is coupon.
 
-- **They yield *above* the bills** (CAGR 5.06% vs 4.55–4.68%). That's the T-bill
-  safety/liquidity premium — Treasuries yield less than equally-short cash — not a
-  bug. Overnight cash is **not** a lower-yielding "shorter tier" than the bills.
-- **SOFR ≈ fed funds:** SOFR averages **0.3 bp below** fed funds over 2018-04+ (their
+- **They yield *above* the bills** (compare the CAGRs in **At a glance**). That's the
+  T-bill safety/liquidity premium — Treasuries yield less than equally-short cash —
+  not a bug. Overnight cash is **not** a lower-yielding "shorter tier" than the bills.
+- **SOFR ≈ fed funds:** SOFR averages **0.2 bp below** fed funds over 2018-04+ (their
   real overlap); the real signal is repo-stress months — e.g. **Sept-2019, SOFR +23 bp
   over fed funds**.
 - **`mmf_0dtm` (SOFR) is real only from 2018-04.** Before that it is proxied as fed

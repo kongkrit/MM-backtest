@@ -67,13 +67,15 @@ line = Apr-2018 (SOFR proxied before).
 One command refreshes everything through the last complete month before today:
 
 ```bash
-scripts/rebuild.sh                      # fetch → build → plot; or /update in Claude Code
+scripts/rebuild.sh                      # fetch → build → plot; or /update-data in Claude Code
 ```
 
 It runs the three stages below in order and stops at the first one that fails (e.g.
 FRED hasn't yet posted the end month), so a failed stage never feeds the next. The
-`/update` skill ([`.claude/skills/update/SKILL.md`](.claude/skills/update/SKILL.md))
-runs the same script and summarizes what changed; it doesn't edit docs or commit.
+`/update-data` skill
+([`.claude/skills/update-data/SKILL.md`](.claude/skills/update-data/SKILL.md)) runs
+the same script, refreshes the build figures in MMF_SUMMARY.md, and summarizes what
+changed; it doesn't commit.
 The stages individually:
 
 ```bash
@@ -112,7 +114,7 @@ python3 -m venv .venv && .venv/bin/python3 -m pip install matplotlib
 | `mmf_0_90dtm.csv`, `mmf_0_30dtm.csv`, `mmf_0dtm.csv`, `mmf_0dtm_fed_funds.csv` | Canonical latest series (repo root). |
 | `mmf_30-90DTM_compare.png`, `mmf_0dtm_compare.png` | Canonical latest 3-pane comparison charts (repo root). |
 | `build_range.json` | Single source of truth for the build-window start (`start_month`); the end is the last complete month before the build date. |
-| `scripts/rebuild.sh`, `.claude/skills/update/SKILL.md` | One-shot fetch → build → plot (`/update` in Claude Code). |
+| `scripts/rebuild.sh`, `.claude/skills/update-data/SKILL.md` | One-shot fetch → build → plot (`/update-data` in Claude Code). |
 | `scripts/fetch_fred.py` | Refreshes the FRED inputs in `data/` (writes only if every download looks complete). |
 | `scripts/build_mmf.py`, `scripts/plot_mmf.py` | Series builder and chart renderer. |
 | `data/` | Raw FRED inputs (`DTB3`, `DTB4WK`, `DFF`, `SOFR`). |
