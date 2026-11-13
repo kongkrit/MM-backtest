@@ -63,13 +63,13 @@ Goal: as simple as possible, without saying anything false.
 - `.claude/settings.json` — committed Claude Code settings (`model: opus`, `effortLevel: xhigh`, permissions,
   `SessionStart` hook). Personal overrides go in `.claude/settings.local.json` (gitignored).
 - `.claude/commands/wrapup.md` — `/wrapup`: writes the session handoff to `PROGRESS.md`, then stages and commits.
-- `.claude/commands/rebuild.md` — `/rebuild`: runs `scripts/rebuild.sh` and summarizes the result (no doc edits, no commit).
+- `.claude/skills/update/SKILL.md` — `/update`: runs `scripts/rebuild.sh` and summarizes the result (no doc edits, no commit).
 - `PROGRESS.md` — session handoff; printed into context at session start by the `SessionStart` hook.
 - `.gitignore`, `.gitattributes`, `LICENSE` — repo hygiene (see Conventions).
 
 ## Build and run
 
-- `scripts/rebuild.sh` (or `/rebuild`) — fetch FRED → build series → render charts, through the last complete
+- `scripts/rebuild.sh` (or `/update`) — fetch FRED → build series → render charts, through the last complete
   calendar month before today. Stops at the first failing step.
 - Stages individually: `python3 scripts/fetch_fred.py`, `python3 scripts/build_mmf.py`,
   `.venv/bin/python3 scripts/plot_mmf.py`.
@@ -77,7 +77,7 @@ Goal: as simple as possible, without saying anything false.
   observation dated after it). On the 1st–2nd of a month that usually means FRED hasn't posted yet — rerun
   later; never work around it by editing data, code, or `build_range.json`.
 - **Permissions:** `scripts/rebuild.sh` is deliberately **not** in the `.claude/settings.json` allow list.
-  It runs without a prompt only inside `/rebuild` (via that command's `allowed-tools`); anywhere else it must
+  It runs without a prompt only inside `/update` (via that skill's `allowed-tools`); anywhere else it must
   prompt. Do not add it to the allow list.
 - No test suite. Verify a build by its printed summary (window, rows, tr_idx/CAGR, proxy spreads), by
   `git diff` on the CSVs (the 0–90 and fed-funds series should only append; the proxied 0–30 and SOFR
@@ -96,7 +96,7 @@ Goal: as simple as possible, without saying anything false.
 - `build_mmf.py` is the single source of truth for paths (`ROOT`, `DATA`, `OUTD`), the snapshot stamp
   format (`STAMP`), and the input list (`SERIES`); `fetch_fred.py` and `plot_mmf.py` import them.
 - Doc statistics (MMF_SUMMARY table, methodology figures) are labelled **"as of the <Mon-YYYY> build"** and
-  are refreshed by hand, not by `/rebuild`. When refreshing one, first reproduce the old value from the
+  are refreshed by hand, not by `/update`. When refreshing one, first reproduce the old value from the
   previous build's CSVs to confirm the method, then recompute.
 
 ## Conventions

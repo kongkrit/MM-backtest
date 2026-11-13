@@ -1,5 +1,6 @@
 ---
-description: Fetch latest FRED data, rebuild the series through the last complete month, re-render charts
+name: update
+description: Fetch the latest FRED data, rebuild the series through the last complete month, and re-render the charts. Use when asked to update or refresh the data.
 allowed-tools: Bash(scripts/rebuild.sh)
 ---
 Run `scripts/rebuild.sh` from the repo root (exactly that command). It runs fetch → build → plot

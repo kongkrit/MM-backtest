@@ -101,10 +101,10 @@ Session handoff for this project. Written by `/wrapup`; auto-loaded into context
   - the full `rebuild.sh` passes with identical outputs.
 
 ## Next steps
-- Monthly refresh is `scripts/rebuild.sh` (or `/rebuild`) any time after FRED posts the prior month's
+- Monthly refresh is `scripts/rebuild.sh` (or `/update`) any time after FRED posts the prior month's
   last day. On the 1st–2nd of a month the gate may stop it; rerun a day later. Doc stats stay
   "as of Sep-2026" until refreshed by hand.
-- **Next: the Oct-2026 row.** Run `/rebuild` from about 2026-11-03, then refresh the doc stats to "as of
+- **Next: the Oct-2026 row.** Run `/update` from about 2026-11-03, then refresh the doc stats to "as of
   the Oct-2026 build" (683 rows, 682 months of return).
 - Optional regime stress check: decompose carry vs MtM through 1973-74, 1980-81, 2008, 2022.
 - Add more buckets (e.g. 0–180 DTM) via the `FUNDS` table (and `SERIES` if they need new inputs).
@@ -112,6 +112,6 @@ Session handoff for this project. Written by `/wrapup`; auto-loaded into context
 ## Open questions
 - Do downstream consumers need the 0–30 series pre-2001 given the proxy caveat — or start it at 2001-08
   for relative-value work?
-- Should `output/` snapshots keep accumulating in-repo (every `/rebuild` adds 6 files), or move to
+- Should `output/` snapshots keep accumulating in-repo (every `/update` adds 6 files), or move to
   gitignored build-history? Pruning exact-subset CSVs saves little: the 0–90 and fed-funds files dedupe,
   but 0–30, SOFR and the PNGs change on every build.
